@@ -1,25 +1,27 @@
 package com.regnosys.rosetta.generator.scalawrapper
 
-import com.regnosys.rosetta.rosetta.RosettaType
+import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Data}
 
 import scala.jdk.CollectionConverters._
 
 object CdmTypeGenerator {
   def generate(enclosingTypes: Iterable[RosettaType]): CdmType => Vector[String] = c => {
-    val allSuperTypes = getAllSuperTypes(c.element, enclosingTypes)
+    val allSuperTypes = mixSuperTypeWithEnclosingTypes(c.element, enclosingTypes)
     if (c.shouldBeSumType)
       Vector(generateSealedTrait(c.element, allSuperTypes, c.element.getAttributes.asScala))
     else
       Vector(generateTrait(c.element, allSuperTypes), generateCaseClass(c.element))
   }
 
+  def generateSealedTrait(r: RosettaType with RosettaDefinable, superTypes: Iterable[RosettaType], attributes: Iterable[Attribute]): String = {
+    val comment = makeOptionalComment(r)
+    s"""${comment}sealed trait ${r.getName}${generateExtendsClauseFromTypes(superTypes)}\n"""
+  }
+
   private def generateTrait(e: Data, allSuperTypes: List[RosettaType]): String = {
     val name = e.getName
-    val traitComment = Option(e.getDefinition) match {
-      case Some(defn) => s"/** $defn */\n"
-      case None => ""
-    }
+    val traitComment = makeOptionalComment(e)
     val attributes = e.getAttributes.asScala
     val fields = generateTraitFields(attributes)
     val extending = generateExtendsClauseFromTypes(allSuperTypes)
@@ -34,7 +36,7 @@ object CdmTypeGenerator {
                             |""".stripMargin
       case None => "/**\n"
     }
-    val attributes = e.getAttributes.asScala
+    val attributes = getAllSupertypeAttributes(e)
     val fieldComments = paramComments(attributes)
     val fields = generateCaseClassFields(attributes)
     val extending = generateExtendsClauseFromStrings(List(name))
@@ -43,6 +45,12 @@ object CdmTypeGenerator {
        |final case class Default$name($fields)$extending
        |""".stripMargin
   }
+
+  private def getAllSupertypeAttributes(e: Data): Vector[Attribute] =
+    Option(e.getSuperType) match {
+      case Some(superType) => getAllSupertypeAttributes(superType) ++ e.getAttributes.asScala
+      case None => e.getAttributes.asScala.toVector
+    }
 
   private def paramComments(attributes: Iterable[Attribute]): String = {
     val comments =
@@ -56,10 +64,7 @@ object CdmTypeGenerator {
 
   private def generateTraitFields(attributes: Iterable[Attribute]): String = {
     val fields = attributes.map { attr =>
-      val comment = Option(attr.getDefinition) match {
-        case Some(defn) => s"  /** $defn */\n"
-        case None => ""
-      }
+      val comment = "  " + makeOptionalComment(attr)
        s"$comment  def ${attr.getName}: ${rosettaAttrToScalaType(attr)}"
     }
     if (fields.isEmpty) "" else fields.mkString("\n", "\n", "\n")

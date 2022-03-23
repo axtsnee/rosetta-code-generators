@@ -2,7 +2,8 @@ package com.regnosys.rosetta.generator.scalawrapper
 
 import scala.jdk.CollectionConverters._
 
-import com.regnosys.rosetta.rosetta.{RosettaEnumValue, RosettaType}
+import com.regnosys.rosetta.rosetta.simple.Attribute
+import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaEnumValue, RosettaType}
 
 object CdmEnumerationGenerator {
   def generate(enclosingTypes: List[RosettaType]): CdmEnumeration => Vector[String] = c => {
@@ -13,6 +14,11 @@ object CdmEnumerationGenerator {
       }
     Vector(generateSealedTrait(c.element, allSuperTypes, Nil) +
       generateCompanionObject(c.element.getEnumValues.asScala, c.element))
+  }
+
+  def generateSealedTrait(r: RosettaType with RosettaDefinable, superTypes: Iterable[RosettaType], attributes: Iterable[Attribute]): String = {
+    val comment = makeOptionalComment(r)
+    s"""${comment}sealed trait ${r.getName}${generateExtendsClauseFromTypes(superTypes)}${generateFields(attributes)}"""
   }
 
   private def generateCompanionObject(enumValues: Iterable[RosettaEnumValue], superTrait: RosettaType): String = {

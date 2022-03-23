@@ -34,16 +34,11 @@ package object scalawrapper {
     else baseType
   }
 
-  def getAllSuperTypes(e: Data, enclosingTypes: Iterable[RosettaType]): List[RosettaType] =
+  def mixSuperTypeWithEnclosingTypes(e: Data, enclosingTypes: Iterable[RosettaType]): List[RosettaType] =
     Option(e.getSuperType) match {
       case Some(superType) => superType :: enclosingTypes.toList
       case None => enclosingTypes.toList
     }
-
-  def generateSealedTrait(r: RosettaType with RosettaDefinable, superTypes: Iterable[RosettaType], attributes: Iterable[Attribute]): String = {
-    s"""/** ${r.getDefinition} */
-        |sealed trait ${r.getName}${generateExtendsClauseFromTypes(superTypes)}${generateFields(attributes)}""".stripMargin('|')
-  }
 
   def generateExtendsClauseFromTypes(superTypes: Iterable[RosettaType]): String =
     generateExtendsClauseFromStrings(superTypes.map(_.getName))
@@ -67,6 +62,12 @@ package object scalawrapper {
     if (attributes.isEmpty)
       "\n"
     else
-      attributes.map(a => s"  def ${a.getName}: ${a.getType}").mkString("{\n", ",\n", "}\n")
+      attributes.map(a => s"  def ${a.getName}: ${a.getType}").mkString(" {\n", ",\n", "}\n")
   }
+
+  def makeOptionalComment(e: RosettaDefinable): String =
+    Option(e.getDefinition) match {
+      case Some(defn) => s"/** $defn */\n"
+      case None => ""
+    }
 }
