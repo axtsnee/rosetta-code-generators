@@ -1,10 +1,10 @@
-package com.regnosys.rosetta.generator
+package com.regnosys.rosetta.generator.scalawrapper
 
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
 import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Data}
 
-package object scalawrapper {
+trait CdmGenerator {
   def mapNullToEmptyString(x: => String): String = Option(x).getOrElse("")
 
   def rosettaAttrToScalaType(attr: Attribute): String = {

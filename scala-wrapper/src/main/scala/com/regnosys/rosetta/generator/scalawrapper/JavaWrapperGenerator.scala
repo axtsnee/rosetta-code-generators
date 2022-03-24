@@ -32,7 +32,7 @@ object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
 
   private def extractEnclosingElements(rootElements: Iterable[CdmElement[_]]): Map[RosettaType, List[RosettaType]] =
     rootElements.foldLeft(Map.empty[RosettaType, List[RosettaType]]) {
-      case (acc, c: CdmType) if c.shouldBeSumType =>
+      case (acc, c: CdmType) if CdmTypeGenerator.shouldBeSumType(c.element) =>
         c.element.getAttributes.asScala.foldLeft(acc)((acc, attr) => {
           acc.updatedWith(attr.getType) {
             case Some(list) => Some(c.element :: list)

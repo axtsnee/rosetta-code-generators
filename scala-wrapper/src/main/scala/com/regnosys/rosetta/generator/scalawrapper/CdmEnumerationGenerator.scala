@@ -5,7 +5,7 @@ import scala.jdk.CollectionConverters._
 import com.regnosys.rosetta.rosetta.simple.Attribute
 import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaEnumValue, RosettaType}
 
-object CdmEnumerationGenerator {
+object CdmEnumerationGenerator extends CdmGenerator {
   def generate(enclosingTypes: List[RosettaType]): CdmEnumeration => Vector[String] = c => {
     val allSuperTypes =
       Option(c.element.getSuperType) match {

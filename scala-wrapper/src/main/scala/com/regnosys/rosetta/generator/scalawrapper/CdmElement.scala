@@ -1,8 +1,6 @@
 package com.regnosys.rosetta.generator.scalawrapper
 
-import scala.jdk.CollectionConverters._
-
-import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaRootElement, RosettaType}
+import com.regnosys.rosetta.rosetta._
 import com.regnosys.rosetta.rosetta.simple.{Data, Function}
 
 sealed trait CdmElement[T <: RosettaRootElement] {
@@ -12,22 +10,20 @@ sealed trait CdmElement[T <: RosettaRootElement] {
 }
 
 final case class CdmType(
-                            override val element: Data,
-                          ) extends CdmElement[Data] {
+  override val element: Data
+) extends CdmElement[Data] {
   override val fileName: String = CdmType.fileName
 
   override def generate(enclosingTypes: Map[RosettaType, List[RosettaType]]): Vector[String] =
     CdmTypeGenerator.generate(enclosingTypes(element))(this)
-
-  def shouldBeSumType: Boolean = element.getConditions.asScala.exists(_.getConstraint.isOneOf)
 }
 object CdmType {
   val fileName: String = "CdmTypes.scala"
 }
 
 final case class CdmMetaType(
-                           override val element: RosettaMetaType,
-                         ) extends CdmElement[RosettaMetaType] {
+  override val element: RosettaMetaType
+) extends CdmElement[RosettaMetaType] {
   override val fileName: String = CdmMetaType.fileName
 
   override def generate(enclosingTypes: Map[RosettaType, List[RosettaType]]): Vector[String] =
@@ -38,8 +34,8 @@ object CdmMetaType {
 }
 
 final case class CdmEnumeration(
-                          override val element: RosettaEnumeration,
-                        ) extends CdmElement[RosettaEnumeration] {
+  override val element: RosettaEnumeration
+) extends CdmElement[RosettaEnumeration] {
   override val fileName: String = CdmEnumeration.fileName
 
   override def generate(enclosingTypes: Map[RosettaType, List[RosettaType]]): Vector[String] =
@@ -50,8 +46,8 @@ object CdmEnumeration {
 }
 
 final case class CdmFunction(
-                               override val element: Function,
-                             ) extends CdmElement[Function] {
+  override val element: Function
+) extends CdmElement[Function] {
   override val fileName: String = CdmFunction.fileName
 
   override def generate(enclosingTypes: Map[RosettaType, List[RosettaType]]): Vector[String] =
@@ -61,7 +57,9 @@ object CdmFunction {
   val fileName: String = "CdmFunctions.scala"
 }
 
-final case class Unknown(override val element: RosettaRootElement) extends CdmElement[RosettaRootElement] {
+final case class Unknown(
+  override val element: RosettaRootElement
+) extends CdmElement[RosettaRootElement] {
   override val fileName: String = Unknown.fileName
 
   override def generate(enclosingTypes: Map[RosettaType, List[RosettaType]]): Vector[String] =
