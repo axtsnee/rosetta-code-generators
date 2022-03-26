@@ -1,38 +1,49 @@
 package com.regnosys.rosetta.generator.scalawrapper
 
 import scala.jdk.CollectionConverters._
+import com.regnosys.rosetta.rosetta.{RosettaEnumValue, RosettaEnumeration, RosettaType}
+import CdmGeneratorFunctions._
 
-import com.regnosys.rosetta.rosetta.simple.Attribute
-import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaEnumValue, RosettaType}
-
-object CdmEnumerationGenerator extends CdmGenerator {
-  def generate(enclosingTypes: List[RosettaType]): CdmEnumeration => Vector[String] = c => {
-    val allSuperTypes =
-      Option(c.element.getSuperType) match {
-        case Some(superType) => superType :: enclosingTypes
-        case None => enclosingTypes
-      }
-    Vector(generateSealedTrait(c.element, allSuperTypes, Nil) +
-      generateCompanionObject(c.element.getEnumValues.asScala, c.element))
+object CdmEnumerationGenerator {
+  def generate(extendingEnums: Set[RosettaType]): RosettaEnumeration => String = e => {
+    generateSealedTrait(e) + generateCompanionObject(e, extendingEnums)
   }
 
-  def generateSealedTrait(r: RosettaType with RosettaDefinable, superTypes: Iterable[RosettaType], attributes: Iterable[Attribute]): String = {
-    val comment = makeOptionalComment(r)
-    s"""${comment}sealed trait ${r.getName}${generateExtendsClauseFromTypes(superTypes)}${generateFields(attributes)}"""
+  def generateSealedTrait(e: RosettaEnumeration): String = {
+    val comment = makeOptionalComment(e)
+    s"${comment}sealed trait ${e.getName}\n"
   }
 
-  private def generateCompanionObject(enumValues: Iterable[RosettaEnumValue], superTrait: RosettaType): String = {
-    val caseObjects = enumValues.map(generateCaseObject(superTrait))
-    s"""object ${superTrait.getName} {
-       |${caseObjects.mkString("\n")}}
+  private def generateCompanionObject(e: RosettaEnumeration, extendingEnums: Set[RosettaType]): String = {
+    val ancestorVals = getInheritedEnumValues(e)
+    val inheritedVals = ancestorVals.keys.map(generateVal(e, ancestorVals))
+    val enumValues = e.getEnumValues.asScala
+    val caseObjects = enumValues.map(generateCaseObject(e, extendingEnums))
+    s"""object ${e.getName} {
+       |${inheritedVals.mkString}${caseObjects.mkString}}
        |""".stripMargin
   }
 
-  private def generateCaseObject(superTrait: RosettaType)(e: RosettaEnumValue): String = {
+  private def getInheritedEnumValues(e: RosettaEnumeration): Map[RosettaEnumValue, RosettaEnumeration] = {
+    def loop(enumOpt: Option[RosettaEnumeration]): Map[RosettaEnumValue, RosettaEnumeration] = enumOpt match {
+      case Some(enum) => loop(Option(enum.getSuperType)) ++
+        enum.getEnumValues.asScala.map(_ -> enum)
+      case None => Map.empty
+    }
+    loop(Option(e.getSuperType))
+  }
+
+  private def generateVal(superTrait: RosettaType, inheritedValues: Map[RosettaEnumValue, RosettaEnumeration])(e: RosettaEnumValue): String = {
+    val comment = makeOptionalComment(e, "  ")
+    val valName = e.getName
+    val ancestor = inheritedValues(e)
+    s"$comment  val $valName: ${superTrait.getName} = ${ancestor.getName}.$valName\n"
+  }
+
+  private def generateCaseObject(superTrait: RosettaType, extendingEnums: Set[RosettaType])(e: RosettaEnumValue): String = {
+    val comment = makeOptionalComment(e, "  ")
     val caseObjectName = e.getName
-    val extending = generateExtendsClauseFromTypes(List(superTrait))
-    s"""  /** ${mapNullToEmptyString(e.getDefinition)} */
-       |  case object $caseObjectName$extending
-       |""".stripMargin
+    val extending = generateExtendsClauseFromTypes(superTrait :: extendingEnums.toList)
+    s"$comment  case object $caseObjectName$extending\n"
   }
 }
