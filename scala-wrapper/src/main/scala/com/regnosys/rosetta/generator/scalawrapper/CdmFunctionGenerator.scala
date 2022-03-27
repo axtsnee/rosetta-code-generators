@@ -4,6 +4,6 @@ import com.regnosys.rosetta.rosetta.simple.Function
 
 object CdmFunctionGenerator {
   val generate: Function => String = e => {
-    e.toString
+    s"/* $e */\n"
   }
 }

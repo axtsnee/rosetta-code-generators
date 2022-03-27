@@ -4,6 +4,10 @@ import com.regnosys.rosetta.rosetta.RosettaMetaType
 
 object CdmMetaTypeGenerator {
   val generate: RosettaMetaType => String = e => {
-    e.toString
+    s"""//RosettaMetaType $e
+       |//  getModel.getName ${e.getModel.getName}
+       |//  getName ${e.getName}
+       |//  getType.getName ${e.getType.getName}
+       |""".stripMargin
   }
 }

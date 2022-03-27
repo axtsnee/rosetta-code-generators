@@ -5,7 +5,7 @@ import scala.jdk.CollectionConverters._
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
 import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Data}
-import CdmGeneratorFunctions._
+import GeneratorFunctions._
 
 object CdmTypeGenerator {
   def generate(enclosingTypes: Iterable[RosettaType]): Data => String = e => {
@@ -54,8 +54,8 @@ object CdmTypeGenerator {
   }
 
   private def getInheritedAttributes(e: Data): Vector[Attribute] = {
-    def loop(superTypeOpt: Option[Data]): Vector[Attribute] = superTypeOpt match {
-      case Some(superType) => loop(Option(superType.getSuperType)) ++ superType.getAttributes.asScala
+    def loop(dOpt: Option[Data]): Vector[Attribute] = dOpt match {
+      case Some(d) => loop(Option(d.getSuperType)) ++ d.getAttributes.asScala
       case None => Vector.empty
     }
     loop(Option(e.getSuperType))

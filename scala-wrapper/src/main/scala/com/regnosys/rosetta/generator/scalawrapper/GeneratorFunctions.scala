@@ -1,15 +1,17 @@
 package com.regnosys.rosetta.generator.scalawrapper
 
-import com.regnosys.rosetta.generator.`object`.ExpandedType
+import com.regnosys.rosetta.generator.`object`.{ExpandedAttribute, ExpandedType}
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
-import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaNamed, RosettaType}
+import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Data}
 
-object CdmGeneratorFunctions {
+object GeneratorFunctions {
   def mapNullToEmptyString(x: => String): String = Option(x).getOrElse("")
 
-  def rosettaAttrToScalaType(attr: Attribute): String = {
-    val expandedAttr = RosettaAttributeExtensions.toExpandedAttribute(attr)
+  def rosettaAttrToScalaType(attr: Attribute): String =
+    rosettaAttrToScalaType(RosettaAttributeExtensions.toExpandedAttribute(attr))
+
+  def rosettaAttrToScalaType(expandedAttr: ExpandedAttribute): String = {
     val baseType = rosettaTypeToScalaType(expandedAttr.getType)
     if (expandedAttr.isSingleOptional) s"Option[$baseType]"
     else if (expandedAttr.isMultiple) s"List[$baseType]"
@@ -28,16 +30,16 @@ object CdmGeneratorFunctions {
     typeName match {
       case "string" => "String"
       case "int" => "Int"
-      case "time" => "java.time.LocalTime"
-      case "date" => "java.time.LocalDate"
-      case "dateTime" => "java.time.LocalDateTime"
-      case "zonedDateTime" => "java.time.ZonedDateTime"
-      case "number" => "scala.math.BigDecimal"
+      case "time" => "LocalTime"
+      case "date" => "LocalDate"
+      case "dateTime" => "LocalDateTime"
+      case "zonedDateTime" => "ZonedDateTime"
+      case "number" => "BigDecimal"
       case "boolean" => "Boolean"
-      case "productType" => "String" //RQualifiedType.PRODUCT_TYPE
-      case "eventType" => "String" //RQualifiedType.EVENT_TYPE
-      case "calculation" => "String" //RCalculationType.CALCULATION
-      case other => other
+      case "productType" => "Any" //RQualifiedType.PRODUCT_TYPE
+      case "eventType" => "Any" //RQualifiedType.EVENT_TYPE
+      case "calculation" => "Any" //RCalculationType.CALCULATION
+      case _ => typeName
     }
 
   def mixSuperTypeWithEnclosingTypes(e: Data, enclosingTypes: Iterable[RosettaType]): List[RosettaType] =

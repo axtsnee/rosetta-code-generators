@@ -2,7 +2,7 @@ package com.regnosys.rosetta.generator.scalawrapper
 
 import scala.jdk.CollectionConverters._
 import com.regnosys.rosetta.rosetta.{RosettaEnumValue, RosettaEnumeration, RosettaType}
-import CdmGeneratorFunctions._
+import GeneratorFunctions._
 
 object CdmEnumerationGenerator {
   def generate(extendingEnums: Set[RosettaType]): RosettaEnumeration => String = e => {
