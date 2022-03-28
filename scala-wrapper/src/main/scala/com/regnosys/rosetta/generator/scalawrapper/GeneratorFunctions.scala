@@ -1,9 +1,11 @@
 package com.regnosys.rosetta.generator.scalawrapper
 
+import scala.jdk.CollectionConverters._
+
 import com.regnosys.rosetta.generator.`object`.{ExpandedAttribute, ExpandedType}
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
+import com.regnosys.rosetta.rosetta.simple.Attribute
 import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
-import com.regnosys.rosetta.rosetta.simple.{Attribute, Data}
 
 object GeneratorFunctions {
   def mapNullToEmptyString(x: => String): String = Option(x).getOrElse("")
@@ -42,12 +44,6 @@ object GeneratorFunctions {
       case _ => typeName
     }
 
-  def mixSuperTypeWithEnclosingTypes(e: Data, enclosingTypes: Iterable[RosettaType]): List[RosettaType] =
-    Option(e.getSuperType) match {
-      case Some(superType) => superType :: enclosingTypes.toList
-      case None => enclosingTypes.toList
-    }
-
   def generateExtendsClauseFromTypes(superTypes: Iterable[RosettaType]): String =
     generateExtendsClauseFromStrings(superTypes.map(rosettaTypeToScalaType))
 
@@ -65,17 +61,66 @@ object GeneratorFunctions {
       case hd :: tl => s" with $hd" + generateWithClausesFromStrings(tl)
       case Nil => ""
     }
-
+/*
   def generateFields(attributes: Iterable[Attribute]): String = {
     if (attributes.isEmpty)
       "\n"
     else
       attributes.map(a => s"  def ${a.getName}: ${rosettaAttrToScalaType(a)}").mkString(" {\n", ",\n", "}\n")
   }
-
-  def makeOptionalComment(e: RosettaDefinable, indent: String = ""): String =
+*/
+  def generateOptionalComment(e: RosettaDefinable, indent: String = ""): String =
     Option(e.getDefinition) match {
       case Some(defn) => s"$indent/** $defn */\n"
       case None => ""
     }
+
+  def generatePartialClassComment(e: RosettaDefinable): String = {
+    Option(e.getDefinition) match {
+      case Some(defn) => s"""/** $defn
+                            |  *
+                            |""".stripMargin
+      case None => "/**\n"
+    }
+  }
+
+  def generateParamComments(attributes: Iterable[Attribute]): String = {
+    val comments =
+      for {
+        attr <- attributes
+        defnOpt = Option(attr.getDefinition)
+        if defnOpt.exists(_.nonEmpty)
+      } yield s"""  * @param ${attr.getName} ${defnOpt.getOrElse("")}"""
+    comments.mkString("\n")
+  }
+
+  def debugFunction(f: com.regnosys.rosetta.rosetta.simple.Function): String =
+    s"""$f
+       |  getName ${f.getName}
+       |  getConditions ${f.getConditions.asScala}
+       |  getDefinition ${f.getDefinition}
+       |  getReferences ${f.getReferences.asScala}
+       |  getAnnotations ${f.getAnnotations.asScala}
+       |  getOutput ${f.getOutput}
+       |  getPostConditions ${f.getPostConditions}
+       |  getInputs ${f.getInputs.asScala}
+       |  getOperations ${f.getOperations.asScala}
+       |  getShortcuts ${f.getShortcuts.asScala}
+       |  getReferences ${f.getReferences.asScala}
+       |""".stripMargin
+
+  def debugAttribute(a: Attribute): String =
+    s"""$a
+       | getName ${a.getName}
+       | getType ${a.getType}
+       | isOverride ${a.isOverride}
+       | isOnlyElement ${a.isOnlyElement}
+       | isIsTypeInferred ${a.isIsTypeInferred}
+       | getDefinition ${a.getDefinition}
+       | getSynonyms ${a.getSynonyms.asScala}
+       | getAnnotations ${a.getAnnotations.asScala}
+       | getRuleReference ${a.getRuleReference}
+       | getCard ${a.getCard}
+       | getReferences ${a.getReferences}
+       |""".stripMargin
 }

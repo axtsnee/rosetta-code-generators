@@ -10,7 +10,7 @@ object CdmEnumerationGenerator {
   }
 
   def generateSealedTrait(e: RosettaEnumeration): String = {
-    val comment = makeOptionalComment(e)
+    val comment = generateOptionalComment(e)
     s"${comment}sealed trait ${e.getName}\n"
   }
 
@@ -34,14 +34,14 @@ object CdmEnumerationGenerator {
   }
 
   private def generateVal(superTrait: RosettaType, inheritedValues: Map[RosettaEnumValue, RosettaEnumeration])(e: RosettaEnumValue): String = {
-    val comment = makeOptionalComment(e, "  ")
+    val comment = generateOptionalComment(e, "  ")
     val valName = e.getName
     val ancestor = inheritedValues(e)
     s"$comment  val $valName: ${superTrait.getName} = ${ancestor.getName}.$valName\n"
   }
 
   private def generateCaseObject(superTrait: RosettaType, extendingEnums: Set[RosettaType])(e: RosettaEnumValue): String = {
-    val comment = makeOptionalComment(e, "  ")
+    val comment = generateOptionalComment(e, "  ")
     val caseObjectName = e.getName
     val extending = generateExtendsClauseFromTypes(superTrait :: extendingEnums.toList)
     s"$comment  case object $caseObjectName$extending\n"

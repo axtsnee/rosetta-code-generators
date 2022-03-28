@@ -9,12 +9,18 @@ import scala.jdk.CollectionConverters._
 import com.google.common.io.Resources
 import com.google.inject.Injector
 import com.regnosys.rosetta.generator.external.AbstractExternalGenerator
+import com.regnosys.rosetta.generator.scalawrapper.JavaWrapperGenerator
 import com.regnosys.rosetta.rosetta.RosettaModel
 import org.apache.commons.io.IOUtils
 import org.eclipse.emf.common.util.URI
 import org.eclipse.xtext.testing.util.ParseHelper
 
 object CdmGenerator {
+  def main(args: Array[String]): Unit = {
+    require(args.nonEmpty)
+    runGenerator(JavaWrapperGenerator, args.head, args.tail.headOption)
+  }
+
   def runGenerator(
       generator: AbstractExternalGenerator,
       rosettaDir: String,

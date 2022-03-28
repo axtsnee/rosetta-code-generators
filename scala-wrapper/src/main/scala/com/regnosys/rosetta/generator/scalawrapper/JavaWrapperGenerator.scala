@@ -10,19 +10,10 @@ import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, Rosett
 import com.regnosys.rosetta.rosetta.simple.{Data, Function}
 
 object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
-  def generatedFileHeader(version: String): String =
-    s"""/**
-       |  * This file is auto-generated from the ISDA Common Domain Model, do not edit.
-       |  * Version: $version
-       |  */
-       |
-       |package org.isda.cdm.scala
-       |
-       |import java.time._
-       |
-       |import scala.math.BigDecimal
-       |
-       |""".stripMargin
+  val typesFilename = "CdmTypes.scala"
+  val metaTypesFilename = "CdmMetaTypes.scala"
+  val enumsFilename = "CdmEnums.scala"
+  val functionsFilename = "CdmFunctions.scala"
 
   override def generate(packages: RosettaJavaPackages, elements: JList[RosettaRootElement], version: String): JMap[String, _ <: CharSequence] = Collections.emptyMap()
 
@@ -30,20 +21,21 @@ object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
     val rootElements = models.asScala.flatMap(_.getElements.asScala)
     val enclosingElements = extractEnclosingElements(rootElements)
     val extendingEnums = extractExtendingEnums(rootElements)
-    val result =
-      rootElements
-        .groupMapReduce(elementToFileName)(translate(enclosingElements, extendingEnums))(_ ++ _)
-        .view
-        .mapValues(generatedFileHeader(models.asScala.head.getVersion) + _)
-        .toMap
-    result.asJava
+    val base = rootElements.groupMapReduce(elementToFileName)(translate(enclosingElements, extendingEnums))(_ ++ _)
+    val version = models.asScala.head.getVersion
+    val result = base
+      .updatedWith(typesFilename)(_.map(generateFileHeaderForTypes(version) + _))
+      .updatedWith(metaTypesFilename)(_.map(generateFileHeaderForMetatypes(version) + _))
+      .updatedWith(enumsFilename)(_.map(generateFileHeaderForEnums(version) + _))
+      .updatedWith(functionsFilename)(_.map(generateFileHeaderForFunctions(version) + _))
+    result.toMap.asJava
   }
 
   private val elementToFileName: RosettaRootElement => String = {
-    case _: Data => "CdmTypes.scala"
-    case _: RosettaMetaType => "CdmMetaTypes.scala"
-    case _: RosettaEnumeration => "CdmEnums.scala"
-    case _: Function => "CdmFunctions.scala"
+    case _: Data => typesFilename
+    case _: RosettaMetaType => metaTypesFilename
+    case _: RosettaEnumeration => enumsFilename
+    case _: Function => functionsFilename
     case _ => "Unknown.txt"
   }
 
@@ -71,7 +63,7 @@ object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
       case (acc, _) => acc
     }
 
-  def translate(enclosingElements: Map[RosettaType, List[RosettaType]], extendingEnums: Map[RosettaType, Set[RosettaType]]): RosettaRootElement => String = {
+  private def translate(enclosingElements: Map[RosettaType, List[RosettaType]], extendingEnums: Map[RosettaType, Set[RosettaType]]): RosettaRootElement => String = {
       case e: Data => CdmTypeGenerator.generate(enclosingElements(e))(e)
       case e: RosettaMetaType => CdmMetaTypeGenerator.generate(e)
       case e: RosettaEnumeration => CdmEnumerationGenerator.generate(extendingEnums(e))(e)
@@ -85,8 +77,28 @@ object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
       case None => Nil
     }
 
-  def main(args: Array[String]): Unit = {
-    require(args.nonEmpty)
-    com.regnosys.rosetta.generators.test.CdmGenerator.runGenerator(this, args.head, args.tail.headOption)
-  }
+  private def generateFileHeaderForEnums(version: String): String =
+    generateFileHeader(version, "org.isda.cdm.scala")
+
+  private def generateFileHeaderForFunctions(version: String): String =
+    generateFileHeader(version, "org.isda.cdm.scala.functions", "org.isda.cdm.scala._")
+
+  private def generateFileHeaderForMetatypes(version: String): String =
+    generateFileHeader(version, "org.isda.cdm.scala")
+
+  private def generateFileHeaderForTypes(version: String): String =
+    generateFileHeader(version, "org.isda.cdm.scala")
+
+  private def generateFileHeader(version: String, pkg: String, imports: String*): String =
+    s"""/**
+       |  * This file is auto-generated from the ISDA Common Domain Model, do not edit.
+       |  * Version: $version
+       |  */
+       |
+       |package $pkg
+       |
+       |import java.time._
+       |import scala.math.BigDecimal
+       |${imports.map("import " + _).mkString("\n")}
+       |""".stripMargin
 }
