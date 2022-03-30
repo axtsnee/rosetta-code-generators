@@ -34,7 +34,10 @@ object CdmGenerator {
     val models = rosettaFiles.map(f => parseHelper.parse(new FileInputStream(f), toUri(f), null, resourceSet))
     val result = generator.afterGenerate(models.asJava).asScala
     result.foreach {
-      case (filename, contents) => Files.writeString(Paths.get(outputDir.getOrElse("."), filename), contents)
+      case (filename, contents) =>
+        val p = Paths.get(outputDir.getOrElse("."), filename)
+        Files.createDirectories(p.getParent)
+        Files.writeString(p, contents)
     }
   }
 

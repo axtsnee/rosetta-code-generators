@@ -6,24 +6,60 @@ import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Data}
 import GeneratorFunctions._
 
-object CdmTypeGenerator {
-  def generate(enclosingTypes: Iterable[RosettaType]): Data => String = e => {
-    val allSuperTypes = mixSuperTypeWithEnclosingTypes(e, enclosingTypes)
+case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.types, analysis.nsToPkgs) {
+  private val enclosingTypes: Map[RosettaType, List[RosettaType]] =
+    analysis.types.foldLeft(Map.empty[RosettaType, List[Data]]) {
+      case (acc, e: Data) if shouldBeSumType(e) =>
+        e.getAttributes.asScala.foldLeft(acc)((acc, attr) => {
+          acc.updatedWith(attr.getType) {
+            case Some(list) => Some(e :: list)
+            case None       => Some(List(e))
+          }
+        })
+      case (acc, _) => acc
+    }.withDefaultValue(Nil)
+
+  override val dependencies: Data => List[RosettaType] =
+    analysis.types.foldLeft(enclosingTypes) {
+      case (acc, e: Data) =>
+        e.getAttributes.asScala.foldLeft(acc)((acc, attr) => {
+          val attrType = attr.getType
+          if (RosettaAttributeExtensions.toExpandedType(attrType).isBuiltInType) acc
+          else
+            acc.updatedWith(e) {
+              case Some(list) => Some(attrType :: list)
+              case None       => Some(attrType :: Nil)
+            }
+        })
+    }.withDefaultValue(Nil)
+
+  override val derivePackageName: Data => String = CdmTypeGenerator.derivePackageName
+
+  override val translate: Data => String = e => {
+    val allSuperTypes = mixSuperTypeWithEnclosingTypes(e)
     if (shouldBeSumType(e))
       generateSealedTrait(e, allSuperTypes)
     else
-      generateTrait(e, allSuperTypes) + generateCaseClass(e)
+      generateTrait(e, allSuperTypes) + "\n" + generateCaseClass(e)
   }
 
-  def shouldBeSumType(e: Data): Boolean =
+  private def shouldBeSumType(e: Data): Boolean =
     getInheritedAttributes(e).isEmpty &&
       e.getConditions.asScala.exists(c => Option(c.getConstraint).exists(_.isOneOf)) &&
       RosettaAttributeExtensions.getExpandedAttributes(e).asScala.forall(_.isSingleOptional)
 
-  private def mixSuperTypeWithEnclosingTypes(e: Data, enclosingTypes: Iterable[RosettaType]): List[RosettaType] =
+  private def getInheritedAttributes(e: Data): Vector[Attribute] = {
+    def loop(dOpt: Option[Data]): Vector[Attribute] = dOpt match {
+      case Some(d) => loop(Option(d.getSuperType)) ++ d.getAttributes.asScala
+      case None => Vector.empty
+    }
+    loop(Option(e.getSuperType))
+  }
+
+  private def mixSuperTypeWithEnclosingTypes(e: Data): List[RosettaType] =
     Option(e.getSuperType) match {
-      case Some(superType) => superType :: enclosingTypes.toList
-      case None => enclosingTypes.toList
+      case Some(superType) => superType :: enclosingTypes(e)
+      case None => enclosingTypes(e)
     }
 
   private def generateSealedTrait(r: RosettaType with RosettaDefinable, superTypes: Iterable[RosettaType]): String = {
@@ -52,14 +88,6 @@ object CdmTypeGenerator {
     s"${classComment}final case class Default$name($fields)$extending\n\n"
   }
 
-  private def getInheritedAttributes(e: Data): Vector[Attribute] = {
-    def loop(dOpt: Option[Data]): Vector[Attribute] = dOpt match {
-      case Some(d) => loop(Option(d.getSuperType)) ++ d.getAttributes.asScala
-      case None => Vector.empty
-    }
-    loop(Option(e.getSuperType))
-  }
-
   private def generateTraitFields(attributes: Iterable[Attribute]): String = {
     val fields = attributes.map { attr =>
       val comment = generateOptionalComment(attr, "  ")
@@ -78,4 +106,8 @@ object CdmTypeGenerator {
     case "val" => "`val`"
     case safe  => safe
   }
+}
+object CdmTypeGenerator {
+  def derivePackageName(e: Data): String =
+    s"${AbstractCdmGenerator.basePkg}.${e.getModel.getName}.types"
 }

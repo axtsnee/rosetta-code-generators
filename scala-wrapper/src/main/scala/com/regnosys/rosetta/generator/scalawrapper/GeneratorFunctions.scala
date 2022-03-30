@@ -10,8 +10,13 @@ import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
 object GeneratorFunctions {
   def mapNullToEmptyString(x: => String): String = Option(x).getOrElse("")
 
-  def rosettaAttrToScalaType(attr: Attribute): String =
-    rosettaAttrToScalaType(RosettaAttributeExtensions.toExpandedAttribute(attr))
+  def rosettaAttrToScalaType(attr: Attribute): String = {
+    val baseType = rosettaTypeToScalaType(attr.getType)
+    val cardinality = attr.getCard
+    if (cardinality.getInf == 0 && cardinality.getSup == 1) s"Option[$baseType]"
+    else if (cardinality.isIsMany) s"List[$baseType]"
+    else baseType
+  }
 
   def rosettaAttrToScalaType(expandedAttr: ExpandedAttribute): String = {
     val baseType = rosettaTypeToScalaType(expandedAttr.getType)
