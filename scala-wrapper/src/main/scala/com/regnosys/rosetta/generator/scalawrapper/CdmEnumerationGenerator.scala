@@ -6,15 +6,20 @@ import GeneratorFunctions._
 
 case class CdmEnumerationGenerator(
     analysis: RootElementAnalyzer
-) extends AbstractCdmGenerator(analysis.enums, analysis.nsToPkgs) {
+) extends AbstractCdmGenerator(analysis.enums) {
   override val dependencies: RosettaEnumeration => Iterable[RosettaEnumeration] =
     analysis.enums.foldLeft(Map.empty[RosettaEnumeration, Set[RosettaEnumeration]]) {
       case (acc, e: RosettaEnumeration) =>
         getAllAncestors(e).foldLeft(acc)((acc, ancestor) => {
-          acc.updatedWith(ancestor) {
-            case Some(descendants) => Some(descendants + e)
-            case None => Some(Set(e))
-          }
+          acc
+            .updatedWith(ancestor) {
+              case Some(descendants) => Some(descendants + e)
+              case None => Some(Set(e))
+            }
+            .updatedWith(e) {
+              case Some(ancestors) => Some(ancestors + ancestor)
+              case None => Some(Set(ancestor))
+            }
         })
     }.withDefaultValue(Set.empty)
 

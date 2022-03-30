@@ -6,10 +6,10 @@ import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Data}
 import GeneratorFunctions._
 
-case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.types, analysis.nsToPkgs) {
+case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.types) {
   private val enclosingTypes: Map[RosettaType, List[RosettaType]] =
     analysis.types.foldLeft(Map.empty[RosettaType, List[Data]]) {
-      case (acc, e: Data) if shouldBeSumType(e) =>
+      case (acc, e) if shouldBeSumType(e) =>
         e.getAttributes.asScala.foldLeft(acc)((acc, attr) => {
           acc.updatedWith(attr.getType) {
             case Some(list) => Some(e :: list)
@@ -21,15 +21,21 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
 
   override val dependencies: Data => List[RosettaType] =
     analysis.types.foldLeft(enclosingTypes) {
-      case (acc, e: Data) =>
-        e.getAttributes.asScala.foldLeft(acc)((acc, attr) => {
-          val attrType = attr.getType
-          if (RosettaAttributeExtensions.toExpandedType(attrType).isBuiltInType) acc
-          else
-            acc.updatedWith(e) {
-              case Some(list) => Some(attrType :: list)
-              case None       => Some(attrType :: Nil)
-            }
+      case (outerAcc, e) =>
+        val accWithSupertype = outerAcc.updatedWith(e) {
+          case s@Some(list) => Option(e.getSuperType).map(_ :: list).orElse(s)
+          case None         => Option(e.getSuperType).map(_ :: Nil)
+        }
+        (getInheritedAttributes(e) ++ e.getAttributes.asScala)
+          .foldLeft(accWithSupertype)((innerAcc, attr) => {
+            val attrType = attr.getType
+            if (RosettaAttributeExtensions.toExpandedType(attrType).isBuiltInType)
+              innerAcc
+            else
+              innerAcc.updatedWith(e) {
+                case Some(list) => Some(attrType :: list)
+                case None       => Some(attrType :: Nil)
+              }
         })
     }.withDefaultValue(Nil)
 

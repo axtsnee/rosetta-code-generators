@@ -3,7 +3,7 @@ package com.regnosys.rosetta.generator.scalawrapper
 import com.regnosys.rosetta.rosetta.{RosettaMetaType, RosettaNamed, RosettaRootElement}
 import GeneratorFunctions._
 
-case class CdmMetaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.metaTypes, analysis.nsToPkgs) {
+case class CdmMetaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.metaTypes) {
 
   override val dependencies: RosettaMetaType => Iterable[RosettaRootElement with RosettaNamed] = _ => Nil
 

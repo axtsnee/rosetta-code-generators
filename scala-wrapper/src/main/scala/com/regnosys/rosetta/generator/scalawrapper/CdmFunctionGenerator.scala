@@ -6,7 +6,7 @@ import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
 import com.regnosys.rosetta.rosetta.{RosettaNamed, RosettaRootElement, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.Function
 
-case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.functions, analysis.nsToPkgs) {
+case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.functions) {
   override val dependencies: Function => List[RosettaType] =
     analysis.functions.foldLeft(Map.empty[Function, List[RosettaType]]) {
       case (acc, e: Function) =>

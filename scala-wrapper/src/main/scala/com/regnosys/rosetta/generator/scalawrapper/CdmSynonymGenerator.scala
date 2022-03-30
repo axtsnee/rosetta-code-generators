@@ -1,6 +1,6 @@
 package com.regnosys.rosetta.generator.scalawrapper
 
-import com.regnosys.rosetta.rosetta.{RosettaRootElement, RosettaSynonym}
+import com.regnosys.rosetta.rosetta.RosettaSynonym
 
 object CdmSynonymGenerator {
   def derivePackageName(e: RosettaSynonym): String =

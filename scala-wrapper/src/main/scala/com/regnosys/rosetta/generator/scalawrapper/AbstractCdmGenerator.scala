@@ -2,13 +2,11 @@ package com.regnosys.rosetta.generator.scalawrapper
 
 import com.regnosys.rosetta.generator.scalawrapper.AbstractCdmGenerator.deriveAnyPackageName
 
-import scala.jdk.CollectionConverters._
-import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaModel, RosettaNamed, RosettaRootElement}
+import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaNamed, RosettaRootElement}
 import com.regnosys.rosetta.rosetta.simple.{Data, Function}
 
 abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
-    elements: Iterable[T],
-    nsToPkgs: Map[String, Iterable[String]]
+    elements: Iterable[T]
 ) {
   def dependencies: T => Iterable[RosettaRootElement with RosettaNamed]
 
@@ -42,21 +40,11 @@ abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
   }
 
   private def generateDeps(ts: Iterable[T]): Set[String] = {
-    val pkgDeps =
-      ts.map(_.getModel)
-        .toSet
-        .flatMap((m: RosettaModel) => m.getImports.asScala)
-        .map(_.getImportedNamespace.replace(".*", ""))
-        .flatMap(nsToPkgs.withDefaultValue(Nil)) //FIXME
-    pkgDeps.map(_ + "._") ++ ts.foldLeft(Set.empty[String]) {
+    ts.foldLeft(Set.empty[String]) {
       case (acc, e) =>
-        val specificImports =
-          dependencies(e)
-            .filterNot(_.getModel == e.getModel) // same pkg - no need to import
-            .map(ancestor => (deriveAnyPackageName(ancestor), ancestor.getName))
-            .filterNot(tuple => pkgDeps.contains(tuple._1)) // already covered
-            .map(tuple => tuple._1 + '.' + tuple._2)
-        acc ++ specificImports
+        acc ++ dependencies(e)
+          .filterNot(_.getModel == e.getModel) // same pkg - no need to import
+          .map(dep => s"${deriveAnyPackageName(dep)}.${dep.getName}")
     }
   }
 
