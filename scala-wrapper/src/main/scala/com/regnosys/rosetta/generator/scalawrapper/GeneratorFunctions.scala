@@ -1,10 +1,9 @@
 package com.regnosys.rosetta.generator.scalawrapper
 
 import scala.jdk.CollectionConverters._
-
 import com.regnosys.rosetta.generator.`object`.{ExpandedAttribute, ExpandedType}
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
-import com.regnosys.rosetta.rosetta.simple.Attribute
+import com.regnosys.rosetta.rosetta.simple.{Annotation, AnnotationRef, Attribute}
 import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
 
 object GeneratorFunctions {
@@ -49,6 +48,22 @@ object GeneratorFunctions {
       case _ => typeName
     }
 
+  def rosettaTypeToJavaType(typ: RosettaType): String =
+    typ.getName match {
+      case "string" => "String"
+      case "int" => "int"
+      case "time" => "LocalTime"
+      case "date" => "LocalDate"
+      case "dateTime" => "LocalDateTime"
+      case "zonedDateTime" => "ZonedDateTime"
+      case "number" => "java.math.BigDecimal"
+      case "boolean" => "boolean"
+      case "productType" => "Object" //RQualifiedType.PRODUCT_TYPE
+      case "eventType" => "Object" //RQualifiedType.EVENT_TYPE
+      case "calculation" => "Object" //RCalculationType.CALCULATION
+      case _ => s"${typ.getModel.getName}.${typ.getName}"
+    }
+
   def generateExtendsClauseFromTypes(superTypes: Iterable[RosettaType]): String =
     generateExtendsClauseFromStrings(superTypes.map(rosettaTypeToScalaType))
 
@@ -66,26 +81,20 @@ object GeneratorFunctions {
       case hd :: tl => s" with $hd" + generateWithClausesFromStrings(tl)
       case Nil => ""
     }
-/*
-  def generateFields(attributes: Iterable[Attribute]): String = {
-    if (attributes.isEmpty)
-      "\n"
-    else
-      attributes.map(a => s"  def ${a.getName}: ${rosettaAttrToScalaType(a)}").mkString(" {\n", ",\n", "}\n")
-  }
-*/
+
   def generateOptionalComment(e: RosettaDefinable, indent: String = ""): String =
     Option(e.getDefinition) match {
-      case Some(defn) => s"$indent/** $defn */\n"
-      case None => ""
+      case Some(defn) if defn.nonEmpty => s"$indent/** $defn */\n"
+      case _ => ""
     }
 
   def generatePartialClassComment(e: RosettaDefinable): String = {
     Option(e.getDefinition) match {
-      case Some(defn) => s"""/** $defn
-                            |  *
-                            |""".stripMargin
-      case None => "/**\n"
+      case Some(defn) if defn.nonEmpty =>
+        s"""/** $defn
+           |  *
+           |""".stripMargin
+      case _ => "/**\n"
     }
   }
 
@@ -102,30 +111,46 @@ object GeneratorFunctions {
   def debugFunction(f: com.regnosys.rosetta.rosetta.simple.Function): String =
     s"""$f
        |  getName ${f.getName}
-       |  getConditions ${f.getConditions.asScala}
        |  getDefinition ${f.getDefinition}
-       |  getReferences ${f.getReferences.asScala}
-       |  getAnnotations ${f.getAnnotations.asScala}
-       |  getOutput ${f.getOutput}
-       |  getPostConditions ${f.getPostConditions}
        |  getInputs ${f.getInputs.asScala}
+       |  getOutput ${f.getOutput}
+       |  getConditions ${f.getConditions.asScala}
+       |  getPostConditions ${f.getPostConditions.asScala}
+       |  getAnnotations ${f.getAnnotations.asScala.map(debugAnnotationRef)}
+       |  getReferences ${f.getReferences.asScala}
        |  getOperations ${f.getOperations.asScala}
        |  getShortcuts ${f.getShortcuts.asScala}
-       |  getReferences ${f.getReferences.asScala}
+       |""".stripMargin
+
+  def debugAnnotationRef(a: AnnotationRef): String =
+    s"""$a
+       | getQualifiers ${a.getQualifiers.asScala}
+       | getAnnotation ${debugAnnotation(a.getAnnotation)}
+       |""".stripMargin
+
+  def debugAnnotation(a: Annotation): String =
+    s"""$a
+       | eIsProxy ${a.eIsProxy}
+       | getName ${a.getName}
+       | getDefinition ${a.getDefinition}
+       | getAttributes ${a.getAttributes.asScala}
+       | getModel ${a.getModel}
+       | getPrefix ${a.getPrefix}
+       | getAnnotations ${a.getAnnotations.asScala.map(debugAnnotationRef)}
        |""".stripMargin
 
   def debugAttribute(a: Attribute): String =
     s"""$a
        | getName ${a.getName}
        | getType ${a.getType}
+       | getDefinition ${a.getDefinition}
+       | getCard ${a.getCard}
+       | getAnnotations ${a.getAnnotations.asScala.map(debugAnnotationRef)}
        | isOverride ${a.isOverride}
        | isOnlyElement ${a.isOnlyElement}
        | isIsTypeInferred ${a.isIsTypeInferred}
-       | getDefinition ${a.getDefinition}
        | getSynonyms ${a.getSynonyms.asScala}
-       | getAnnotations ${a.getAnnotations.asScala}
        | getRuleReference ${a.getRuleReference}
-       | getCard ${a.getCard}
        | getReferences ${a.getReferences}
        |""".stripMargin
 }

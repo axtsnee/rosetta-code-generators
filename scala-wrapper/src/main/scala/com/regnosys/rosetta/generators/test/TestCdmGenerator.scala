@@ -15,7 +15,7 @@ import org.apache.commons.io.IOUtils
 import org.eclipse.emf.common.util.URI
 import org.eclipse.xtext.testing.util.ParseHelper
 
-object CdmGenerator {
+object TestCdmGenerator {
   def main(args: Array[String]): Unit = {
     require(args.nonEmpty)
     runGenerator(JavaWrapperGenerator, args.head, args.tail.headOption)
@@ -30,6 +30,7 @@ object CdmGenerator {
     val parseHelper = injector.getInstance(classOf[ParseHelper[RosettaModel]])
     val basicModel = parseHelper.parse(basicTypes)
     val resourceSet = basicModel.eResource().getResourceSet
+    val _ = parseHelper.parse(annotations, resourceSet)
     val rosettaFiles = getRecursiveListOfRosettaFiles(new File(rosettaDir))
     val models = rosettaFiles.map(f => parseHelper.parse(new FileInputStream(f), toUri(f), null, resourceSet))
     val result = generator.afterGenerate(models.asJava).asScala
@@ -40,6 +41,9 @@ object CdmGenerator {
         Files.writeString(p, contents)
     }
   }
+
+  private def annotations: String =
+    IOUtils.toString(Resources.getResource("model/annotations.rosetta"), Charset.defaultCharset())
 
   private def basicTypes: String =
     IOUtils.toString(Resources.getResource("model/basictypes.rosetta"), Charset.defaultCharset())

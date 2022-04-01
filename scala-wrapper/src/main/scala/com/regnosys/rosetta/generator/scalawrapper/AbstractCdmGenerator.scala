@@ -43,7 +43,7 @@ abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
     ts.foldLeft(Set.empty[String]) {
       case (acc, e) =>
         acc ++ dependencies(e)
-          .filterNot(_.getModel == e.getModel) // same pkg - no need to import
+          .filterNot(d => deriveAnyPackageName(d) == deriveAnyPackageName(e)) // same pkg - no need to import
           .map(dep => s"${deriveAnyPackageName(dep)}.${dep.getName}")
     }
   }
@@ -55,6 +55,7 @@ abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
        |  */
        |import java.time._
        |import scala.math.BigDecimal
+       |import scala.jdk.CollectionConverters._
        |
        |""".stripMargin
   }

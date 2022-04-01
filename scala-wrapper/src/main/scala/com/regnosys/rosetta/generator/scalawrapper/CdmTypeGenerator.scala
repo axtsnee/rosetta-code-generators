@@ -2,7 +2,7 @@ package com.regnosys.rosetta.generator.scalawrapper
 
 import scala.jdk.CollectionConverters._
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
-import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
+import com.regnosys.rosetta.rosetta.RosettaType
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Data}
 import GeneratorFunctions._
 
@@ -68,9 +68,13 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
       case None => enclosingTypes(e)
     }
 
-  private def generateSealedTrait(r: RosettaType with RosettaDefinable, superTypes: Iterable[RosettaType]): String = {
-    val comment = generateOptionalComment(r)
-    s"""${comment}sealed trait ${r.getName}${generateExtendsClauseFromTypes(superTypes)}\n"""
+  private def generateSealedTrait(e: Data, superTypes: Iterable[RosettaType]): String = {
+    val name = e.getName
+    val traitComment = generateOptionalComment(e)
+    val extending = generateExtendsClauseFromTypes(superTypes)
+    s"""${traitComment}sealed trait $name$extending
+       |${generateCompanionObject(e)}
+       |""".stripMargin
   }
 
   private def generateTrait(e: Data, allSuperTypes: List[RosettaType]): String = {
@@ -78,7 +82,20 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     val traitComment = generateOptionalComment(e)
     val fields = generateTraitFields(e.getAttributes.asScala)
     val extending = generateExtendsClauseFromTypes(allSuperTypes)
-    s"${traitComment}trait $name$extending {$fields}\n"
+    s"""${traitComment}trait $name$extending {$fields}
+        |${generateCompanionObject(e)}
+        |""".stripMargin
+  }
+
+  private def generateCompanionObject(e: Data): String = {
+    val name = e.getName
+    val javaName = rosettaTypeToJavaType(e)
+    s"""object $name {
+       |  def toJava(x: $name): $javaName =
+       |    new $javaName.${name}BuilderImpl()
+       |      .build
+       |}
+       |""".stripMargin
   }
 
   private def generateCaseClass(e: Data): String = {
@@ -91,7 +108,12 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
         generatePartialClassComment(e) + generateParamComments(attributes) + "\n  */\n"
     val fields = generateCaseClassFields(attributes)
     val extending = generateExtendsClauseFromStrings(List(name))
-    s"${classComment}final case class Default$name($fields)$extending\n\n"
+    s"""${classComment}final case class Default$name($fields)$extending
+        |object Default$name {
+        |  def fromJava(x: ${rosettaTypeToJavaType(e)}): Default$name = ???
+        |}
+        |
+        |""".stripMargin
   }
 
   private def generateTraitFields(attributes: Iterable[Attribute]): String = {
