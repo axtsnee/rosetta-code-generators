@@ -1,18 +1,22 @@
 package com.regnosys.rosetta.generator.scalawrapper
 
 import scala.jdk.CollectionConverters._
+
 import com.regnosys.rosetta.generator.scalawrapper.GeneratorFunctions._
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
 import com.regnosys.rosetta.rosetta.{RosettaRootElement, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Function}
 
 case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.functions) {
+  private val implicitConverter = "convertToScala"
+
   override val dependencies: Function => Set[RosettaType] =
     analysis.functions.foldLeft(Map.empty[Function, Set[RosettaType]]) {
       case (acc, e: Function) =>
         (Option(e.getOutput).toList ++ e.getInputs.asScala).foldLeft(acc)((acc, attr) => {
           val attrType = attr.getType
-          if (RosettaAttributeExtensions.toExpandedType(attrType).isBuiltInType) acc
+          if (RosettaAttributeExtensions.toExpandedType(attrType).isBuiltInType)
+            acc
           else
             acc.updatedWith(e) {
               case Some(set) => Some(set + attrType)
@@ -51,7 +55,8 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
     val shortName = output.getType.getName
     shortName match {
       case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" | "date" | "number" => ""
-      case _ => s"(implicit convertToScala: ${rosettaTypeToJavaType(output.getType)} => $shortName)"
+      case "productType" | "eventType" | "calculation" => ""
+      case _ => s"(implicit $implicitConverter: ${rosettaTypeToJavaType(output.getType)} => $shortName)"
     }
   }
 
@@ -79,49 +84,11 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
         s"${e.getModel.getName}.functions.${e.getName}.${e.getName}Default"
     val paramConversions =
       params
-        .map(p => convertScalaToJava(p.getName, rosettaAttrToScalaType(p)))
+        .map(p => convertScalaAttributeToJava(p))
         .mkString(", ")
     val javaFunctionCall = s"new $javaClass().evaluate($paramConversions)"
-    val cardinality = output.getCard
-    if (cardinality.getInf == 0 && cardinality.getSup == 1)
-      s"Option($javaFunctionCall)${mapToScala(output)}"
-    else if (cardinality.isIsMany)
-      s"$javaFunctionCall.asScala.toList${mapToScala(output)}"
-    else
-      output.getType.getName match {
-        case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" => javaFunctionCall
-        case "date" => s"$javaFunctionCall.toLocalDate"
-        case "number" => s"BigDecimal($javaFunctionCall)"
-        case _ => s"convertToScala($javaFunctionCall)"
-      }
+    convertJavaAttributeToScala(output, Some(javaFunctionCall), Some(implicitConverter))
   }
-
-  private def mapToScala(output: Attribute): String =
-    output.getType.getName match {
-      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" => ""
-      case "date" => ".map(_.toLocalDate)"
-      case "number" => ".map(BigDecimal.apply)"
-      case _ => ".map(x => convertToScala(x))"
-    }
-
-  private def convertScalaToJava(name: String, typeName: String): String =
-    typeName match {
-      case s"Option[$t]" => s"$name${mapScalaToJava(t)}.orNull"
-      case s"List[$t]" => s"$name${mapScalaToJava(t)}.asJava"
-      case "BigDecimal" => s"$name.bigDecimal"
-      case "LocalDate"  => s"com.rosetta.model.lib.records.Date.of($name)"
-      case "Boolean" | "Int" | "String" | "LocalTime" | "LocalDateTime" | "ZonedDateTime" => name
-      case _ => s"$typeName.toJava($name)"
-    }
-
-  private def mapScalaToJava(typeName: String): String =
-    typeName match {
-      case "BigDecimal" => ".map(_.bigDecimal)"
-      case "LocalDate"  => ".map(com.rosetta.model.lib.records.Date.of)"
-      case "Boolean" | "String" | "LocalTime" | "LocalDateTime" | "ZonedDateTime" => ""
-      case "Int" => ".map(i => i: Integer)"
-      case _ => s".map($typeName.toJava)"
-    }
 }
 object CdmFunctionGenerator {
   def derivePackageName(e: Function): String =

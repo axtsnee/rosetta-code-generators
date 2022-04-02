@@ -15,7 +15,7 @@ case class RootElementAnalyzer(
       case e: Function => copy(functions = e :: functions)
       case e: RosettaMetaType => copy(metaTypes = e :: metaTypes)
       case e: Data => copy(types = e :: types)
-      // Unhandled: synonyms, annotation, body, corpus, segment
+      // Unhandled: synonym, annotation, body, corpus, segment
       case _ => this
     }
 }

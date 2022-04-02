@@ -5,8 +5,7 @@ import scala.jdk.CollectionConverters._
 
 import com.regnosys.rosetta.generator.external.AbstractExternalGenerator
 import com.regnosys.rosetta.generator.java.RosettaJavaPackages
-import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaModel, RosettaRootElement}
-import com.regnosys.rosetta.rosetta.simple.{Data, Function}
+import com.regnosys.rosetta.rosetta.{RosettaModel, RosettaRootElement}
 
 object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
   val enumFilename: String = "CdmEnums.scala"
