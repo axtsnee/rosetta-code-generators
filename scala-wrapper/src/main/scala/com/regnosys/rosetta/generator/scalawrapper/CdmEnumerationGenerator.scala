@@ -61,7 +61,7 @@ case class CdmEnumerationGenerator(
        |  def toJava(x: $name): $javaName = x match {
        |$scalaMatchStatements
        |  }
-       |  def fromJava(x: $javaName): $name = x match {
+       |  def fromJava(x: $javaName): Try[$name] = x match {
        |$javaMatchStatements
        |  }
        |}
@@ -80,7 +80,7 @@ case class CdmEnumerationGenerator(
   }
 
   private def matchOnJavaValue(e: RosettaEnumeration)(v: RosettaEnumValue): String =
-    s"    case ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)} => ${v.getName}"
+    s"    case ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)} => Success(${v.getName})"
 
   private def getValuesByAncestor(e: RosettaEnumeration): Map[RosettaEnumValue, RosettaEnumeration] = {
     def loop(enumOpt: Option[RosettaEnumeration]): Map[RosettaEnumValue, RosettaEnumeration] = enumOpt match {

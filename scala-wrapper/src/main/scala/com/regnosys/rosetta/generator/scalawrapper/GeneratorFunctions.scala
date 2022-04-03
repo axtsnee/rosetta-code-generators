@@ -16,6 +16,12 @@ object GeneratorFunctions {
   def isMultiple(a: Attribute): Boolean =
     a.getCard.isIsMany
 
+  def rosettaAttrToJavaType(a: Attribute): String = {
+    val baseType = rosettaTypeToJavaType(a.getType)
+    if (isMultiple(a)) s"java.util.List[_ <: $baseType]"
+    else baseType
+  }
+
   def rosettaAttrToScalaType(a: Attribute): String = {
     val baseType = rosettaTypeToScalaType(a.getType)
     if (isSingleOptional(a)) s"Option[$baseType]"
@@ -47,13 +53,13 @@ object GeneratorFunctions {
   def rosettaTypeToJavaType(typ: RosettaType): String =
     typ.getName match {
       case "string" => "String"
-      case "int" => "int"
+      case "int" => "java.lang.Integer"
       case "time" => "LocalTime"
-      case "date" => "LocalDate"
+      case "date" => "com.rosetta.model.lib.records.Date"
       case "dateTime" => "LocalDateTime"
       case "zonedDateTime" => "ZonedDateTime"
       case "number" => "java.math.BigDecimal"
-      case "boolean" => "boolean"
+      case "boolean" => "java.lang.Boolean"
       case "productType" => "String" //RQualifiedType.PRODUCT_TYPE
       case "eventType" => "String" //RQualifiedType.EVENT_TYPE
       case "calculation" => "String" //RCalculationType.CALCULATION
@@ -63,7 +69,7 @@ object GeneratorFunctions {
   def hasMetadataAnnotation(a: Attribute): Boolean =
     a.getAnnotations.asScala.exists(_.getAnnotation.getName == "metadata")
 
-  def convertRosettaAttributeFromJavaToScala(
+  def convertRosettaAttributeFromJavaToScalaTry(
       a: Attribute,
       nameOpt: Option[String] = None,
       customConverterOpt: Option[String] = None
@@ -72,39 +78,43 @@ object GeneratorFunctions {
     val typeName = a.getType.getName
     val isMeta = hasMetadataAnnotation(a)
     val customConverter = customConverterOpt.getOrElse(s"$typeName.fromJava")
-    if (isSingleOptional(a))
-      s"Option($name)${mapRosettaAttributeFromJavaToScala(a, customConverter, isMeta)}"
-    else if (isMultiple(a))
-      s"$name.asScala.toList${mapRosettaAttributeFromJavaToScala(a, customConverter, isMeta)}"
-    else {
+    if (isSingleOptional(a)) {
+      val mapping = mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta)
+      s"traverseTry(Option($name))($mapping)"
+    } else if (isMultiple(a)) {
+      val mapping = mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta)
+      s"traverseTry(Option($name.asScala).getOrElse(Nil).toList)($mapping)"
+    } else {
       val value = if (isMeta) s"$name.getValue" else name
-      convertRosettaTypeFromJavaToScala(typeName, value, customConverter)
+      convertRosettaTypeFromJavaToScalaTry(typeName, value, customConverter)
     }
   }
 
-  def convertRosettaTypeFromJavaToScala(typeName: String, value: String, customConverter: String): String =
+  def convertRosettaTypeFromJavaToScalaTry(typeName: String, value: String, customConverter: String): String =
     typeName match {
-      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" => value
-      case "productType" => value //RQualifiedType.PRODUCT_TYPE
-      case "eventType" => value //RQualifiedType.EVENT_TYPE
-      case "calculation" => value //RCalculationType.CALCULATION
-      case "date" => s"$value.toLocalDate"
-      case "number" => s"BigDecimal($value)"
+      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" => s"Success($value)"
+      case "productType" => s"Success($value)" //RQualifiedType.PRODUCT_TYPE
+      case "eventType" => s"Success($value)" //RQualifiedType.EVENT_TYPE
+      case "calculation" => s"Success($value)" //RCalculationType.CALCULATION
+      case "date" => s"Success($value.toLocalDate)"
+      case "number" => s"Success(BigDecimal($value))"
       case _ => s"$customConverter($value)"
     }
 
-  private def mapRosettaAttributeFromJavaToScala(a: Attribute, customConverter: String, isMeta: Boolean): String =
+  private def mapRosettaAttributeFromJavaToScalaTry(a: Attribute, customConverter: String, isMeta: Boolean): String =
     a.getType.getName match {
-      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" if isMeta => ".map(_.getValue)"
-      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" => ""
-      case "productType" | "eventType" | "calculation" if isMeta => ".map(_.getValue)"
-      case "productType" | "eventType" | "calculation" => ""
-      case "date" if isMeta => ".map(_.getValue.toLocalDate)"
-      case "date" => ".map(_.toLocalDate)"
-      case "number" if isMeta => ".map(b => BigDecimal(b.getValue))"
-      case "number" => ".map(BigDecimal.apply)"
-      case _ if isMeta => s".map(a => $customConverter(a.getValue))"
-      case _ => s".map($customConverter)"
+      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" if isMeta => "x => Success(x.getValue)"
+      case "string" | "time" | "dateTime" | "zonedDateTime" => "Success.apply"
+      case "int" => "i => Success(i: Int)"
+      case "boolean" => "n => Success(n: Boolean)"
+      case "productType" | "eventType" | "calculation" if isMeta => ".map(x => Success(x.getValue))"
+      case "productType" | "eventType" | "calculation" => "Success.apply"
+      case "date" if isMeta => "d => Try(d.getValue.toLocalDate)"
+      case "date" => "d => Try(d.toLocalDate)"
+      case "number" if isMeta => "b => Success(BigDecimal(b.getValue))"
+      case "number" => "b => Success(BigDecimal(b))"
+      case _ if isMeta => s"a => $customConverter(a.getValue)"
+      case _ => customConverter
     }
 
   def convertRosettaAttributeFromScalaToJava(a: Attribute, nameOpt: Option[String] = None): String =

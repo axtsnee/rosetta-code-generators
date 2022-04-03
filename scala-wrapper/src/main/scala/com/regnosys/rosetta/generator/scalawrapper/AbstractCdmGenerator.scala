@@ -54,9 +54,16 @@ abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
        |  * Version: $version
        |  */
        |import java.time._
-       |import scala.math.BigDecimal
-       |import scala.jdk.CollectionConverters._
        |
+       |import scala.annotation.tailrec
+       |import scala.jdk.CollectionConverters._
+       |import scala.math.BigDecimal
+       |import scala.util.{Try, Success, Failure}
+       |
+       |import com.google.inject.Injector
+       |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
+       |import com.regnosys.rosetta.common.validation.ValidationReport
+       |import Utils._
        |""".stripMargin
   }
 }

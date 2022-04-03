@@ -20,6 +20,17 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
       case (acc, _) => acc
     }.withDefaultValue(Nil)
 
+  private val subtypesByType: Map[Data, Set[Data]] =
+    analysis.types.foldLeft(Map.empty[Data, Set[Data]]) {
+      case (acc, e: Data) =>
+        getAllAncestors(e).foldLeft(acc)((acc, ancestor) => {
+          acc.updatedWith(ancestor) {
+            case Some(descendants) => Some(descendants + e)
+            case None => Some(Set(e))
+          }
+        })
+    }.withDefaultValue(Set.empty)
+
   override val dependencies: Data => List[RosettaType] =
     analysis.types.foldLeft(enclosingTypes) {
       case (outerAcc, e) =>
@@ -44,25 +55,39 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
 
   override val translate: Data => String = e => {
     val allSuperTypes = mixSuperTypeWithEnclosingTypes(e)
-    if (shouldBeSumType(e))
-      generateSealedTrait(e, allSuperTypes)
-    else
+    if (shouldBeSumType(e)) {
+      if ((getInheritedAttributes(e) ++ e.getAttributes.asScala).isEmpty) {
+        generateEmptySealedTrait(e, allSuperTypes)
+      } else {
+        generateSealedTrait(e, allSuperTypes)
+      }
+    } else {
       generateTrait(e, allSuperTypes) + "\n" + generateCaseClass(e)
+    }
   }
+
+  private def getAllAncestors(e: Data): List[Data] =
+    Option(e.getSuperType) match {
+      case Some(superType) => superType :: getAllAncestors(superType)
+      case None => Nil
+    }
 
   private def shouldBeSumType(e: Data): Boolean = {
     val attrs = e.getAttributes.asScala
-    getInheritedAttributes(e).isEmpty &&
-      e.getConditions.asScala.exists(c => Option(c.getConstraint).exists(_.isOneOf)) &&
-      attrs.groupBy(_.getType).values.forall(_.lengthIs == 1)  && // the type of each attr is different
-      attrs.forall { a =>
-        isSingleOptional(a) &&
-          !RosettaAttributeExtensions.isBuiltInType(a.getType) &&
-          (a.getType match {
-            case _: Data => true
-            case _ => false
-          })
-      }
+    getInheritedAttributes(e).isEmpty && (
+      attrs.isEmpty || (
+        e.getConditions.asScala.exists(c => Option(c.getConstraint).exists(_.isOneOf)) &&
+        attrs.groupBy(_.getType).values.forall(_.lengthIs == 1)  && // the type of each attr is different
+        attrs.forall { a =>
+          isSingleOptional(a) &&
+            !RosettaAttributeExtensions.isBuiltInType(a.getType) &&
+            (a.getType match {
+              case _: Data => true
+              case _ => false
+            })
+        }
+      )
+    )
   }
 
   private def getInheritedAttributes(e: Data): Vector[Attribute] = {
@@ -79,12 +104,52 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
       case None => enclosingTypes(e)
     }
 
+  private def generateEmptySealedTrait(e: Data, superTypes: Iterable[RosettaType]): String = {
+    val scalaTypeName = e.getName
+    val traitComment = generateOptionalComment(e)
+    val extending = generateExtendsClauseFromTypes(superTypes)
+    val sealedTrait = s"${traitComment}sealed trait $scalaTypeName$extending"
+    // subTypes must be sorted from deepest descendant to shallowest to
+    // prevent a supertype's case statement from hiding the subtype's.
+    val subTypes = subtypesByType(e).toList.sortBy(t => getAllAncestors(t).length).reverse
+    if (subTypes.isEmpty) {
+      sealedTrait + "\n"
+    } else {
+      val javaTypeName = rosettaTypeToJavaType(e)
+      val toJavaStmts = subTypes.map(t => s"      case a: ${t.getName} => ${t.getName}.toJava(a)").mkString("\n")
+      val fromJavaStmts = subTypes.map(t => s"      case a: ${rosettaTypeToJavaType(t)} => ${t.getName}.fromJava(a)").mkString("\n")
+      s"""$sealedTrait
+         |object $scalaTypeName {
+         |  def toJava(t: $scalaTypeName): $javaTypeName = {
+         |    t match {
+         |$toJavaStmts
+         |    }
+         |  }
+         |
+         |  def fromJava(t: $javaTypeName)(implicit validator: RosettaTypeValidator): Try[$scalaTypeName] =
+         |    t match {
+         |$fromJavaStmts
+         |    }
+         |}
+         |""".stripMargin
+    }
+  }
+
   private def generateSealedTrait(e: Data, superTypes: Iterable[RosettaType]): String = {
     val name = e.getName
     val traitComment = generateOptionalComment(e)
     val extending = generateExtendsClauseFromTypes(superTypes)
     val javaName = rosettaTypeToJavaType(e)
-    val attrs = e.getAttributes.asScala
+    implicit val descendantsBeforeAncestors: Ordering[Attribute] = (a, b) => {
+      (a.getType, b.getType) match {
+        case (ta: Data, tb: Data) =>
+          if (getAllAncestors(ta).contains(tb)) -1
+          else if (getAllAncestors(tb).contains(ta)) +1
+          else 0
+        case (_, _) => 0
+      }
+    }
+    val attrs = e.getAttributes.asScala.sorted
     val javaObject = "x"
     val pattern =
       attrs
@@ -93,7 +158,7 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     val caseStmts = attrs.map { a =>
       val typeName = a.getType.getName
       s"""      case Some($javaObject: ${rosettaTypeToJavaType(a.getType)}) =>
-         |        ${convertRosettaTypeFromJavaToScala(typeName, javaObject, s"$typeName.fromJava")}
+         |        ${convertRosettaTypeFromJavaToScalaTry(typeName, javaObject, s"$typeName.fromJava")}
          |""".stripMargin
     }
     s"""${traitComment}sealed trait $name$extending
@@ -106,7 +171,7 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
        |    builder.build
        |  }
        |
-       |  def fromJava($javaObject: ${rosettaTypeToJavaType(e)}): $name =
+       |  def fromJava($javaObject: $javaName)(implicit validator: RosettaTypeValidator): Try[$name] =
        |    $pattern match {
        |${caseStmts.mkString}
        |    }
@@ -131,9 +196,11 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     val extending = generateExtendsClauseFromTypes(allSuperTypes)
     val javaName = rosettaTypeToJavaType(e)
     val allAttrs = getInheritedAttributes(e) ++ attrs
-    val scalaObject = "x"
-    val fromJavaFields = allAttrs.map(a => generateJavaObjectAccessor(a, scalaObject)).mkString(", ")
+    val scalaObject = "a"
+    val javaObject = "b"
+    val forStatements = allAttrs.map(a => generateJavaObjectAccessor(a, javaObject)).mkString("\n")
     val builderStatements = allAttrs.map(a => generateBuilderStmtForAttr(a, scalaObject, "      ")).mkString("\n")
+    val escapedAttributeNames = allAttrs.map(n => escapeReservedWords(n.getName)).mkString(", ")
     s"""${traitComment}trait $name$extending {$fields}
         |object $name {
         |  def toJava($scalaObject: $name): $javaName = $scalaObject match {
@@ -141,8 +208,10 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
         |    case _ => buildJava($scalaObject)
         |  }
         |
-        |  def fromJava($scalaObject: ${rosettaTypeToJavaType(e)}): $name =
-        |    Default$name($fromJavaFields)
+        |  def fromJava($javaObject: ${rosettaTypeToJavaType(e)})(implicit validator: RosettaTypeValidator): Try[$name] =
+        |    for {
+        |$forStatements
+        |    } yield Default$name($escapedAttributeNames)
         |
         |  private[types] def buildJava($scalaObject: $name): $javaName =
         |    new $javaName.${name}BuilderImpl()
@@ -162,16 +231,24 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
         generatePartialClassComment(e) + generateParamComments(attributes) + "\n  */\n"
     val fields = generateCaseClassFields(attributes)
     val extending = generateExtendsClauseFromStrings(List(name))
-    s"""${classComment}final case class Default$name($fields)$extending {
-        |  private[types] val toJava: ${rosettaTypeToJavaType(e)} =
-        |    $name.buildJava(this)
+    s"""${classComment}final case class Default$name($fields)(implicit validator: RosettaTypeValidator)$extending {
+        |  private[types] val toJava: ${rosettaTypeToJavaType(e)} = {
+        |    val unvalidated = $name.buildJava(this)
+        |    val validation = validator.runProcessStep(unvalidated.getClass, unvalidated.toBuilder)
+        |    if (validation.success) unvalidated
+        |    else throw new IllegalStateException(validation.validationFailures.asScala.mkString("; "))
+        |  }
         |}
         |
         |""".stripMargin
   }
 
-  private def generateJavaObjectAccessor(a: Attribute, ref: String): String =
-    convertRosettaAttributeFromJavaToScala(a, Some(s"$ref.get${toUpperFirst(a.getName)}"))
+  private def generateJavaObjectAccessor(a: Attribute, ref: String): String = {
+    val name = a.getName
+    val accessor = s"$ref.get${toUpperFirst(name)}"
+    val conversion = convertRosettaAttributeFromJavaToScalaTry(a, Some(accessor))
+    s"      ${escapeReservedWords(name)} <- $conversion"
+  }
 
   private def generateBuilderStmtForAttr(a: Attribute, ref: String, indent: String): String =
     generateBuilderStmt(a, convertRosettaAttributeFromScalaToJava(a, Some(s"$ref.${escapeReservedWords(a.getName)}")), indent)

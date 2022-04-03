@@ -12,6 +12,7 @@ object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
   val functionFilename: String = "CdmFunctions.scala"
   val metaTypeFilename: String = "CdmMetaTypes.scala"
   val typeFilename: String = "CdmTypes.scala"
+  val utilsFilename: String = "Utils.scala"
 
   override def generate(
       packages: RosettaJavaPackages,
@@ -30,7 +31,8 @@ object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
       enumFilename -> CdmEnumerationGenerator(analysis).generateFile,
       functionFilename -> CdmFunctionGenerator(analysis).generateFile,
       metaTypeFilename -> CdmMetaTypeGenerator(analysis).generateFile,
-      typeFilename -> CdmTypeGenerator(analysis).generateFile
+      typeFilename -> CdmTypeGenerator(analysis).generateFile,
+      utilsFilename -> CdmUtilsGenerator.generateFile
     ).asJava
   }
 }
