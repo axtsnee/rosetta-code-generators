@@ -30,7 +30,7 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
         (getInheritedAttributes(e) ++ e.getAttributes.asScala)
           .foldLeft(accWithSupertype)((innerAcc, attr) => {
             val attrType = attr.getType
-            if (RosettaAttributeExtensions.toExpandedType(attrType).isBuiltInType)
+            if (RosettaAttributeExtensions.isBuiltInType(attrType))
               innerAcc
             else
               innerAcc.updatedWith(e) {
@@ -50,10 +50,20 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
       generateTrait(e, allSuperTypes) + "\n" + generateCaseClass(e)
   }
 
-  private def shouldBeSumType(e: Data): Boolean =
+  private def shouldBeSumType(e: Data): Boolean = {
+    val attrs = e.getAttributes.asScala
     getInheritedAttributes(e).isEmpty &&
       e.getConditions.asScala.exists(c => Option(c.getConstraint).exists(_.isOneOf)) &&
-      e.getAttributes.asScala.forall(isSingleOptional)
+      attrs.groupBy(_.getType).values.forall(_.lengthIs == 1)  && // the type of each attr is different
+      attrs.forall { a =>
+        isSingleOptional(a) &&
+          !RosettaAttributeExtensions.isBuiltInType(a.getType) &&
+          (a.getType match {
+            case _: Data => true
+            case _ => false
+          })
+      }
+  }
 
   private def getInheritedAttributes(e: Data): Vector[Attribute] = {
     def loop(dOpt: Option[Data]): Vector[Attribute] = dOpt match {
@@ -74,21 +84,43 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     val traitComment = generateOptionalComment(e)
     val extending = generateExtendsClauseFromTypes(superTypes)
     val javaName = rosettaTypeToJavaType(e)
+    val attrs = e.getAttributes.asScala
+    val javaObject = "x"
+    val pattern =
+      attrs
+        .map(a => s"$javaObject.get${toUpperFirst(a.getName)}")
+        .mkString("(Option(", ")).orElse(Option(", "))")
+    val caseStmts = attrs.map { a =>
+      val typeName = a.getType.getName
+      s"""      case Some($javaObject: ${rosettaTypeToJavaType(a.getType)}) =>
+         |        ${convertRosettaTypeFromJavaToScala(typeName, javaObject, s"$typeName.fromJava")}
+         |""".stripMargin
+    }
     s"""${traitComment}sealed trait $name$extending
        |object $name {
-       |  def toJava(x: $name): $javaName = {
+       |  def toJava(t: $name): $javaName = {
        |    val builder = new $javaName.${name}BuilderImpl()
-       |    //x match {
-       |    //  case y: Y => builder.setTheYValue(Y.toJava(y))
-       |    //}
+       |    t match {
+       |${generateCaseStmtForBuilder(attrs).mkString("\n")}
+       |    }
        |    builder.build
        |  }
        |
-       |  def fromJava(x: ${rosettaTypeToJavaType(e)}): $name = x match {
-       |    case _ => ???
-       |  }
+       |  def fromJava($javaObject: ${rosettaTypeToJavaType(e)}): $name =
+       |    $pattern match {
+       |${caseStmts.mkString}
+       |    }
        |}
        |""".stripMargin
+  }
+
+  private def generateCaseStmtForBuilder(attrs: Iterable[Attribute]): Iterable[String] = {
+    val patMatchVar = "x"
+    attrs.map { a =>
+      val scalaType = rosettaTypeToScalaType(a.getType)
+      val setter = generateBuilderStmtForObj(a, scalaType, patMatchVar, "")
+      s"      case $patMatchVar: $scalaType => builder$setter"
+    }
   }
 
   private def generateTrait(e: Data, allSuperTypes: List[RosettaType]): String = {
@@ -99,19 +131,20 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     val extending = generateExtendsClauseFromTypes(allSuperTypes)
     val javaName = rosettaTypeToJavaType(e)
     val allAttrs = getInheritedAttributes(e) ++ attrs
-    val fromJavaFields = allAttrs.map(generateJavaObjectAccessor).mkString(", ")
-    val builderStatements = allAttrs.map(generateBuildStatement).mkString("\n")
+    val scalaObject = "x"
+    val fromJavaFields = allAttrs.map(a => generateJavaObjectAccessor(a, scalaObject)).mkString(", ")
+    val builderStatements = allAttrs.map(a => generateBuilderStmtForAttr(a, scalaObject, "      ")).mkString("\n")
     s"""${traitComment}trait $name$extending {$fields}
         |object $name {
-        |  def toJava(x: $name): $javaName = x match {
+        |  def toJava($scalaObject: $name): $javaName = $scalaObject match {
         |    case d: Default$name => d.toJava
-        |    case _ => buildJava(x)
+        |    case _ => buildJava($scalaObject)
         |  }
         |
-        |  def fromJava(x: ${rosettaTypeToJavaType(e)}): $name =
+        |  def fromJava($scalaObject: ${rosettaTypeToJavaType(e)}): $name =
         |    Default$name($fromJavaFields)
         |
-        |  private[types] def buildJava(x: $name): $javaName =
+        |  private[types] def buildJava($scalaObject: $name): $javaName =
         |    new $javaName.${name}BuilderImpl()
         |$builderStatements
         |      .build
@@ -137,15 +170,20 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
         |""".stripMargin
   }
 
-  private def generateJavaObjectAccessor(a: Attribute): String =
-    convertJavaAttributeToScala(a, Some("x.get" + toUpperFirst(a.getName)))
+  private def generateJavaObjectAccessor(a: Attribute, ref: String): String =
+    convertRosettaAttributeFromJavaToScala(a, Some(s"$ref.get${toUpperFirst(a.getName)}"))
 
-  private def generateBuildStatement(a: Attribute): String = {
+  private def generateBuilderStmtForAttr(a: Attribute, ref: String, indent: String): String =
+    generateBuilderStmt(a, convertRosettaAttributeFromScalaToJava(a, Some(s"$ref.${escapeReservedWords(a.getName)}")), indent)
+
+  private def generateBuilderStmtForObj(a: Attribute, scalaType: String, ref: String, indent: String): String =
+    generateBuilderStmt(a, convertScalaTypeToJava(scalaType, ref), indent)
+
+  private def generateBuilderStmt(a: Attribute, convertedAttribute: String, indent: String): String = {
     val name = a.getName
     val value = if (hasMetadataAnnotation(a)) "Value" else ""
     val mutator = s".set${toUpperFirst(name)}$value"
-    val convertedAttribute = convertScalaAttributeToJava(a, Some("x." + escapeReservedWords(name)))
-    s"      $mutator($convertedAttribute)"
+    s"$indent$mutator($convertedAttribute)"
   }
 
   private def generateTraitFields(attributes: Iterable[Attribute]): String = {

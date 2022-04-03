@@ -15,7 +15,7 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
       case (acc, e: Function) =>
         (Option(e.getOutput).toList ++ e.getInputs.asScala).foldLeft(acc)((acc, attr) => {
           val attrType = attr.getType
-          if (RosettaAttributeExtensions.toExpandedType(attrType).isBuiltInType)
+          if (RosettaAttributeExtensions.isBuiltInType(attrType))
             acc
           else
             acc.updatedWith(e) {
@@ -65,7 +65,7 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
 
   private def generateImportStatement(output: Attribute): String =
     output.getType match {
-      case x if RosettaAttributeExtensions.toExpandedType(x).isBuiltInType => ""
+      case x if RosettaAttributeExtensions.isBuiltInType(x) => ""
       case e: RosettaRootElement => s"  import ${AbstractCdmGenerator.deriveAnyPackageName(e)}.${e.getName}._\n"
       case _ => ""
     }
@@ -84,10 +84,10 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
         s"${e.getModel.getName}.functions.${e.getName}.${e.getName}Default"
     val paramConversions =
       params
-        .map(p => convertScalaAttributeToJava(p))
+        .map(p => convertRosettaAttributeFromScalaToJava(p))
         .mkString(", ")
     val javaFunctionCall = s"new $javaClass().evaluate($paramConversions)"
-    convertJavaAttributeToScala(output, Some(javaFunctionCall), Some(implicitConverter))
+    convertRosettaAttributeFromJavaToScala(output, Some(javaFunctionCall), Some(implicitConverter))
   }
 }
 object CdmFunctionGenerator {
