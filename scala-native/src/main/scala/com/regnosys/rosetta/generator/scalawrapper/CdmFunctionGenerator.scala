@@ -4,11 +4,11 @@ import scala.jdk.CollectionConverters._
 
 import com.regnosys.rosetta.generator.scalawrapper.GeneratorFunctions._
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
-import com.regnosys.rosetta.rosetta.{RosettaRootElement, RosettaType}
+import com.regnosys.rosetta.rosetta.RosettaType
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Function}
 
 case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.functions) {
-  private val implicitConverter = "convertToScala"
+  private val converterParmName = "convertToScala"
 
   override val dependencies: Function => Set[RosettaType] =
     analysis.functions.foldLeft(Map.empty[Function, Set[RosettaType]]) {
@@ -41,10 +41,10 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
         val paramDecls = params.map { p =>
           s"${p.getName}: ${rosettaAttrToScalaType(p)}"
         }
-        val javaFunctionCall = generateJavaFunctionCall(e, params, output)
+        val javaFunctionCall = generateJavaFunctionCall(e, params)
         val rawOutputType = rosettaAttrToJavaType(output)
         val convertedOutputType = rosettaAttrToScalaType(output)
-        val convertResult = convertRosettaAttributeFromJavaToScalaTry(output, Some("result"), Some(implicitConverter))
+        val convertResult = convertRosettaAttributeFromJavaToScalaTry(output, Some("result"), Some((x: String) => s"$converterParmName($x)"))
         s"""${comment}object ${e.getName} {
            |  def apply(
            |    ${paramDecls.mkString(", ")}
@@ -67,9 +67,10 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
     output.getType.getName match {
       case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" | "date" | "number" => ""
       case "productType" | "eventType" | "calculation" => ""
+      case enum if enum.endsWith("Enum") => ""
       case customType =>
         val fromType = rosettaTypeToJavaType(output.getType)
-        s", $implicitConverter: $fromType => Try[$customType]"
+        s", $converterParmName: $fromType => Try[$customType]"
     }
   }
 
@@ -78,8 +79,7 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
 
   private def generateJavaFunctionCall(
       e: Function,
-      params: Iterable[Attribute],
-      output: Attribute
+      params: Iterable[Attribute]
   ): String = {
     val javaClass = s"${e.getModel.getName}.functions.${e.getName}"
     val paramConversions =

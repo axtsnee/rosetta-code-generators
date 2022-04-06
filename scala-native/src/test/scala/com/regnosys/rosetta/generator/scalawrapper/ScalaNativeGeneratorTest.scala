@@ -4,11 +4,11 @@ import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
+class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   import Fixtures._
 
-  "The JavaWrapperGenerator" should "handle simple enums" in {
-    val actual = ParserHelper.parse(cdmTestEnum).get(JavaWrapperGenerator.enumFilename)
+  "The ScalaNativeGenerator" should "handle simple enums" in {
+    val actual = ParserHelper.parse(cdmTestEnum).get(ScalaNativeGenerator.enumFilename)
     val expected =
       """package org.isda.scala.test.enums {
         |
@@ -20,13 +20,18 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
         |  /** Test enum value 2 */
         |  case object TestEnumValue2 extends TestEnum
         |
-        |  def toJava(x: TestEnum): test.TestEnum = x match {
-        |    case TestEnumValue1 => test.TestEnum.TEST_ENUM_VALUE_1
-        |    case TestEnumValue2 => test.TestEnum.TEST_ENUM_VALUE_2
+        |  implicit class JavaConverter(x: TestEnum) {
+        |    def asJava: test.TestEnum = x match {
+        |      case TestEnumValue1 => test.TestEnum.TEST_ENUM_VALUE_1
+        |      case TestEnumValue2 => test.TestEnum.TEST_ENUM_VALUE_2
+        |    }
         |  }
-        |  def fromJava(x: test.TestEnum): Try[TestEnum] = x match {
-        |    case test.TestEnum.TEST_ENUM_VALUE_1 => Success(TestEnumValue1)
-        |    case test.TestEnum.TEST_ENUM_VALUE_2 => Success(TestEnumValue2)
+        |
+        |  implicit class ScalaConverter(x: test.TestEnum) {
+        |    def asScala: TestEnum = x match {
+        |      case test.TestEnum.TEST_ENUM_VALUE_1 => TestEnumValue1
+        |      case test.TestEnum.TEST_ENUM_VALUE_2 => TestEnumValue2
+        |    }
         |  }
         |}
         |
@@ -36,13 +41,13 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle one-of enums part 1" in {
-    val actual = ParserHelper.parse(cdmTestOneOfType + cdmTestEnum + cdmTestType + cdmTestType2).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestOneOfType + cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected = "sealed trait TestSumType"
     actual.value.toString should include(expected)
   }
 
   it should "handle one-of enums part 2" in {
-    val actual = ParserHelper.parse(cdmTestOneOfType + cdmTestEnum + cdmTestType + cdmTestType2).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestOneOfType + cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""/** Test type description. */
          |trait TestType extends TestSumType {
@@ -62,7 +67,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle one-of enums part 3" in {
-    val actual = ParserHelper.parse(cdmTestOneOfType + cdmTestEnum + cdmTestType + cdmTestType2).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestOneOfType + cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""trait TestType2 extends TestSumType {
          |  /** Test number list */
@@ -77,7 +82,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle simple types part 1" in {
-    val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""/** Test type description. */
          |trait TestType {
@@ -97,7 +102,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle simple types part 2" in {
-    val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""/** Test type description.
          |  *
@@ -126,7 +131,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle simple types part 3" in {
-    val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""trait TestType2 {
          |  /** Test number list */
@@ -141,7 +146,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle simple types part 4" in {
-    val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""/**
          |  * @param testType2Value1 Test number list
@@ -157,7 +162,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle hierarchical types part 1" in {
-    val actual = ParserHelper.parse(cdmTestHierarchy).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""trait TestType2 extends TestType3 {
          |  /** Test number */
@@ -170,7 +175,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle hierarchical types part 2" in {
-    val actual = ParserHelper.parse(cdmTestHierarchy).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""trait TestType3 {
          |  /** Test string */
@@ -183,7 +188,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle hierarchical types part 3" in {
-    val actual = ParserHelper.parse(cdmTestHierarchy).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""final case class DefaultTestType(
          |  testType3Value1: Option[String],
@@ -197,7 +202,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle hierarchical types part 4" in {
-    val actual = ParserHelper.parse(cdmTestHierarchy).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""final case class DefaultTestType2(
          |  testType3Value1: Option[String],
@@ -209,7 +214,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle hierarchical types part 5" in {
-    val actual = ParserHelper.parse(cdmTestHierarchy).get(JavaWrapperGenerator.typeFilename)
+    val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
       s"""final case class DefaultTestType3(
          |  testType3Value1: Option[String],

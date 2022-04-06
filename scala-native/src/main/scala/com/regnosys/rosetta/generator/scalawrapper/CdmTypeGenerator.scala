@@ -116,20 +116,23 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
       sealedTrait + "\n"
     } else {
       val javaTypeName = rosettaTypeToJavaType(e)
-      val toJavaStmts = subTypes.map(t => s"      case a: ${t.getName} => ${t.getName}.toJava(a)").mkString("\n")
-      val fromJavaStmts = subTypes.map(t => s"      case a: ${rosettaTypeToJavaType(t)} => ${t.getName}.fromJava(a)").mkString("\n")
+      val toJavaStmts = subTypes.map(t => s"        case ja: ${t.getName} => new ${t.getName}.JavaConverter(ja).asJava").mkString("\n")
+      val fromJavaStmts = subTypes.map(t => s"        case sc: ${rosettaTypeToJavaType(t)} => new ${t.getName}.ScalaConverter(sc).asScala").mkString("\n")
       s"""$sealedTrait
          |object $scalaTypeName {
-         |  def toJava(t: $scalaTypeName): $javaTypeName = {
-         |    t match {
+         |  implicit class JavaConverter(t: $scalaTypeName) {
+         |    def asJava: $javaTypeName =
+         |      t match {
          |$toJavaStmts
-         |    }
+         |      }
          |  }
          |
-         |  def fromJava(t: $javaTypeName)(implicit validator: RosettaTypeValidator): Try[$scalaTypeName] =
-         |    t match {
+         |  implicit class ScalaConverter(t: $javaTypeName) {
+         |    def asScala(implicit validator: RosettaTypeValidator): Try[$scalaTypeName] =
+         |      t match {
          |$fromJavaStmts
-         |    }
+         |      }
+         |  }
          |}
          |""".stripMargin
     }
@@ -157,24 +160,28 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
         .mkString("(Option(", ")).orElse(Option(", "))")
     val caseStmts = attrs.map { a =>
       val typeName = a.getType.getName
-      s"""      case Some($javaObject: ${rosettaTypeToJavaType(a.getType)}) =>
-         |        ${convertRosettaTypeFromJavaToScalaTry(typeName, javaObject, s"$typeName.fromJava")}
+      s"""        case Some($javaObject: ${rosettaTypeToJavaType(a.getType)}) =>
+         |          ${convertRosettaTypeFromJavaToScalaTry(typeName, javaObject, (x: String) => s"new $typeName.ScalaConverter($x).asScala")}
          |""".stripMargin
     }
     s"""${traitComment}sealed trait $name$extending
        |object $name {
-       |  def toJava(t: $name): $javaName = {
-       |    val builder = new $javaName.${name}BuilderImpl()
-       |    t match {
+       |  implicit class JavaConverter(t: $name) {
+       |    def asJava: $javaName = {
+       |      val builder = new $javaName.${name}BuilderImpl()
+       |      t match {
        |${generateCaseStmtForBuilder(attrs).mkString("\n")}
+       |      }
+       |      builder.build
        |    }
-       |    builder.build
        |  }
        |
-       |  def fromJava($javaObject: $javaName)(implicit validator: RosettaTypeValidator): Try[$name] =
-       |    $pattern match {
+       |  implicit class ScalaConverter($javaObject: $javaName) {
+       |    def asScala(implicit validator: RosettaTypeValidator): Try[$name] =
+       |      $pattern match {
        |${caseStmts.mkString}
-       |    }
+       |      }
+       |  }
        |}
        |""".stripMargin
   }
@@ -184,7 +191,7 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     attrs.map { a =>
       val scalaType = rosettaTypeToScalaType(a.getType)
       val setter = generateBuilderStmtForObj(a, scalaType, patMatchVar, "")
-      s"      case $patMatchVar: $scalaType => builder$setter"
+      s"        case $patMatchVar: $scalaType => builder$setter"
     }
   }
 
@@ -199,19 +206,23 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     val scalaObject = "a"
     val javaObject = "b"
     val forStatements = allAttrs.map(a => generateJavaObjectAccessor(a, javaObject)).mkString("\n")
-    val builderStatements = allAttrs.map(a => generateBuilderStmtForAttr(a, scalaObject, "      ")).mkString("\n")
+    val builderStatements = allAttrs.map(a => generateBuilderStmtForAttr(a, scalaObject, "        ")).mkString("\n")
     val escapedAttributeNames = allAttrs.map(n => escapeReservedWords(n.getName)).mkString(", ")
     s"""${traitComment}trait $name$extending {$fields}
         |object $name {
-        |  def toJava($scalaObject: $name): $javaName = $scalaObject match {
-        |    case d: Default$name => d.toJava
-        |    case _ => buildJava($scalaObject)
+        |  implicit class JavaConverter($scalaObject: $name) {
+        |    def asJava: $javaName = $scalaObject match {
+        |      case d: Default$name => d.toJava
+        |      case _ => buildJava($scalaObject)
+        |    }
         |  }
         |
-        |  def fromJava($javaObject: ${rosettaTypeToJavaType(e)})(implicit validator: RosettaTypeValidator): Try[$name] =
-        |    for {
+        |  implicit class ScalaConverter($javaObject: ${rosettaTypeToJavaType(e)}) {
+        |    def asScala(implicit validator: RosettaTypeValidator): Try[$name] =
+        |      for {
         |$forStatements
-        |    } yield Default$name($escapedAttributeNames)
+        |      } yield Default$name($escapedAttributeNames)
+        |  }
         |
         |  private[types] def buildJava($scalaObject: $name): $javaName =
         |    new $javaName.${name}BuilderImpl()
@@ -247,7 +258,7 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     val name = a.getName
     val accessor = s"$ref.get${toUpperFirst(name)}"
     val conversion = convertRosettaAttributeFromJavaToScalaTry(a, Some(accessor))
-    s"      ${escapeReservedWords(name)} <- $conversion"
+    s"        ${escapeReservedWords(name)} <- $conversion"
   }
 
   private def generateBuilderStmtForAttr(a: Attribute, ref: String, indent: String): String =

@@ -58,11 +58,16 @@ case class CdmEnumerationGenerator(
     val javaMatchStatements = allEnumValues.map(matchOnJavaValue(e)).mkString("\n")
     s"""object $name {
        |$inheritedVals$caseObjects
-       |  def toJava(x: $name): $javaName = x match {
+       |  implicit class JavaConverter(x: $name) {
+       |    def asJava: $javaName = x match {
        |$scalaMatchStatements
+       |    }
        |  }
-       |  def fromJava(x: $javaName): Try[$name] = x match {
+       |
+       |  implicit class ScalaConverter(x: $javaName) {
+       |    def asScala: $name = x match {
        |$javaMatchStatements
+       |    }
        |  }
        |}
        |""".stripMargin
@@ -76,11 +81,11 @@ case class CdmEnumerationGenerator(
         v.getName
       else
         s"`${v.getName}`"
-    s"    case $pattern => ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)}"
+    s"      case $pattern => ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)}"
   }
 
   private def matchOnJavaValue(e: RosettaEnumeration)(v: RosettaEnumValue): String =
-    s"    case ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)} => Success(${v.getName})"
+    s"      case ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)} => ${v.getName}"
 
   private def getValuesByAncestor(e: RosettaEnumeration): Map[RosettaEnumValue, RosettaEnumeration] = {
     def loop(enumOpt: Option[RosettaEnumeration]): Map[RosettaEnumValue, RosettaEnumeration] = enumOpt match {

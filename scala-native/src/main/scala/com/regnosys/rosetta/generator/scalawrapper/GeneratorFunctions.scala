@@ -72,12 +72,12 @@ object GeneratorFunctions {
   def convertRosettaAttributeFromJavaToScalaTry(
       a: Attribute,
       nameOpt: Option[String] = None,
-      customConverterOpt: Option[String] = None
+      customConverterOpt: Option[String => String] = None
   ): String = {
     val name = nameOpt.getOrElse(a.getName)
     val typeName = a.getType.getName
     val isMeta = hasMetadataAnnotation(a)
-    val customConverter = customConverterOpt.getOrElse(s"$typeName.fromJava")
+    val customConverter = customConverterOpt.getOrElse((x: String) => s"new $typeName.ScalaConverter($x).asScala")
     if (isSingleOptional(a)) {
       val mapping = mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta)
       s"traverseTry(Option($name))($mapping)"
@@ -90,7 +90,7 @@ object GeneratorFunctions {
     }
   }
 
-  def convertRosettaTypeFromJavaToScalaTry(typeName: String, value: String, customConverter: String): String =
+  def convertRosettaTypeFromJavaToScalaTry(typeName: String, value: String, customConverter: String => String): String =
     typeName match {
       case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" => s"Success($value)"
       case "productType" => s"Success($value)" //RQualifiedType.PRODUCT_TYPE
@@ -98,10 +98,11 @@ object GeneratorFunctions {
       case "calculation" => s"Success($value)" //RCalculationType.CALCULATION
       case "date" => s"Success($value.toLocalDate)"
       case "number" => s"Success(BigDecimal($value))"
-      case _ => s"$customConverter($value)"
+      case enum if enum.endsWith("Enum") => s"Success(new $enum.ScalaConverter($value).asScala)"
+      case _ => customConverter(value)
     }
 
-  private def mapRosettaAttributeFromJavaToScalaTry(a: Attribute, customConverter: String, isMeta: Boolean): String =
+  private def mapRosettaAttributeFromJavaToScalaTry(a: Attribute, customConverter: String => String, isMeta: Boolean): String =
     a.getType.getName match {
       case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" if isMeta => "x => Success(x.getValue)"
       case "string" | "time" | "dateTime" | "zonedDateTime" => "Success.apply"
@@ -113,8 +114,10 @@ object GeneratorFunctions {
       case "date" => "d => Try(d.toLocalDate)"
       case "number" if isMeta => "b => Success(BigDecimal(b.getValue))"
       case "number" => "b => Success(BigDecimal(b))"
-      case _ if isMeta => s"a => $customConverter(a.getValue)"
-      case _ => customConverter
+      case enum if enum.endsWith("Enum") && isMeta => s"e => Success(new $enum.ScalaConverter(e.getValue).asScala)"
+      case enum if enum.endsWith("Enum") => s"e => Success(new $enum.ScalaConverter(e).asScala)"
+      case _ if isMeta => s"a => ${customConverter("a.getValue")}"
+      case _ => s"a => ${customConverter("a")}"
     }
 
   def convertRosettaAttributeFromScalaToJava(a: Attribute, nameOpt: Option[String] = None): String =
@@ -128,7 +131,7 @@ object GeneratorFunctions {
       case "productType" | "eventType" | "calculation" => thingToConvert
       case "BigDecimal" => s"$thingToConvert.bigDecimal"
       case "LocalDate"  => s"com.rosetta.model.lib.records.Date.of($thingToConvert)"
-      case _ => s"$typeToConvert.toJava($thingToConvert)"
+      case _ => s"new $typeToConvert.JavaConverter($thingToConvert).asJava"
     }
   }
 
@@ -140,7 +143,7 @@ object GeneratorFunctions {
       case "Int" => ".map(i => i: Integer)"
       case "BigDecimal" => ".map(_.bigDecimal)"
       case "LocalDate"  => ".map(com.rosetta.model.lib.records.Date.of)"
-      case _ => s".map($typeToConvert.toJava)"
+      case _ => s".map(t => new $typeToConvert.JavaConverter(t).asJava)"
     }
 
   def generateExtendsClauseFromTypes(superTypes: Iterable[RosettaType]): String =

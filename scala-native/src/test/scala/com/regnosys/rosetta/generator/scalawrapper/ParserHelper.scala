@@ -4,11 +4,11 @@ import java.nio.file.{Files, Path}
 import java.util.Collections
 import scala.jdk.CollectionConverters._
 import scala.util.Using
-import com.regnosys.rosetta.generator.scalawrapper.JavaWrapperGenerator.afterGenerate
+import com.regnosys.rosetta.generator.scalawrapper.ScalaNativeGenerator.afterGenerate
 import com.regnosys.rosetta.generators.test.TestHelper
 
 object ParserHelper {
-  private lazy val testHelper = new TestHelper(JavaWrapperGenerator)
+  private lazy val testHelper = new TestHelper(ScalaNativeGenerator)
   private implicit val autodelete: Using.Releasable[Path] = p => Files.delete(p)
 
   val preamble =

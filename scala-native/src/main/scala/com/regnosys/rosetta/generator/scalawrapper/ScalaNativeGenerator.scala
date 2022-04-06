@@ -7,7 +7,7 @@ import com.regnosys.rosetta.generator.external.AbstractExternalGenerator
 import com.regnosys.rosetta.generator.java.RosettaJavaPackages
 import com.regnosys.rosetta.rosetta.{RosettaModel, RosettaRootElement}
 
-object JavaWrapperGenerator extends AbstractExternalGenerator("ScalaWrapper") {
+object ScalaNativeGenerator extends AbstractExternalGenerator("ScalaWrapper") {
   val enumFilename: String = "CdmEnums.scala"
   val functionFilename: String = "CdmFunctions.scala"
   val metaTypeFilename: String = "CdmMetaTypes.scala"
