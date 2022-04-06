@@ -19,6 +19,15 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
         |  case object TestEnumValue1 extends TestEnum
         |  /** Test enum value 2 */
         |  case object TestEnumValue2 extends TestEnum
+        |
+        |  def toJava(x: TestEnum): test.TestEnum = x match {
+        |    case TestEnumValue1 => test.TestEnum.TEST_ENUM_VALUE_1
+        |    case TestEnumValue2 => test.TestEnum.TEST_ENUM_VALUE_2
+        |  }
+        |  def fromJava(x: test.TestEnum): Try[TestEnum] = x match {
+        |    case test.TestEnum.TEST_ENUM_VALUE_1 => Success(TestEnumValue1)
+        |    case test.TestEnum.TEST_ENUM_VALUE_2 => Success(TestEnumValue2)
+        |  }
         |}
         |
         |}
@@ -104,7 +113,14 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
          |  testTypeValue3: List[String],
          |  testTypeValue4: TestType2,
          |  testEnum: Option[TestEnum]
-         |) extends TestType
+         |)(implicit validator: RosettaTypeValidator) extends TestType {
+         |  private[types] val toJava: test.TestType = {
+         |    val unvalidated = TestType.buildJava(this)
+         |    val validation = validator.runProcessStep(unvalidated.getClass, unvalidated.toBuilder)
+         |    if (validation.success) unvalidated
+         |    else throw new IllegalStateException(validation.validationFailures.asScala.mkString("; "))
+         |  }
+         |}
          |""".stripMargin
     actual.value.toString should include(expected)
   }
@@ -136,8 +152,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
          |  testType2Value1: List[BigDecimal],
          |  testType2Value2: Option[LocalDate],
          |  testEnum: TestEnum
-         |) extends TestType2
-         |""".stripMargin
+         |)(implicit validator: RosettaTypeValidator) extends TestType2""".stripMargin
     actual.value.toString should include(expected)
   }
 
@@ -177,8 +192,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
          |  testType2Value2: List[LocalDate],
          |  testType1Value1: String,
          |  testType1Value2: Option[Int]
-         |) extends TestType
-         |""".stripMargin
+         |)(implicit validator: RosettaTypeValidator) extends TestType""".stripMargin
     actual.value.toString should include(expected)
   }
 
@@ -190,8 +204,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
          |  testType3Value2: List[Int],
          |  testType2Value1: Option[BigDecimal],
          |  testType2Value2: List[LocalDate]
-         |) extends TestType2
-         |""".stripMargin
+         |)(implicit validator: RosettaTypeValidator) extends TestType2""".stripMargin
     actual.value.toString should include(expected)
   }
 
@@ -201,8 +214,7 @@ class JavaWrapperGeneratorTest extends AnyFlatSpec with Matchers {
       s"""final case class DefaultTestType3(
          |  testType3Value1: Option[String],
          |  testType3Value2: List[Int]
-         |) extends TestType3
-         |""".stripMargin
+         |)(implicit validator: RosettaTypeValidator) extends TestType3""".stripMargin
     actual.value.toString should include(expected)
   }
 }
