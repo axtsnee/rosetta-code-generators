@@ -2,8 +2,9 @@ package com.regnosys.rosetta.generator.scalawrapper
 
 import scala.jdk.CollectionConverters._
 
-import com.regnosys.rosetta.rosetta.simple.{Annotation, AnnotationRef, Attribute}
-import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaType}
+import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
+import com.regnosys.rosetta.rosetta.simple.{Annotated, Annotation, AnnotationRef, Attribute}
+import com.regnosys.rosetta.rosetta.{RosettaDefinable, RosettaEnumeration, RosettaType}
 
 object GeneratorFunctions {
   def mapNullToEmptyString(x: => String): String = Option(x).getOrElse("")
@@ -17,9 +18,52 @@ object GeneratorFunctions {
     a.getCard.isIsMany
 
   def rosettaAttrToJavaType(a: Attribute): String = {
-    val baseType = rosettaTypeToJavaType(a.getType)
-    if (isMultiple(a)) s"java.util.List[_ <: $baseType]"
-    else baseType
+    val rosettaType = a.getType
+    val isMeta = hasMetadataAnnotation(a)
+    val baseType =
+      if (isMeta) rosettaMetaToJavaInterface(a)
+      else rosettaTypeToJavaType(rosettaType)
+    if (isMultiple(a))
+      rosettaType match {
+        case builtIn if RosettaAttributeExtensions.isBuiltInType(builtIn) =>
+          s"java.util.List[$baseType]"
+        case _: RosettaEnumeration if !isMeta => s"java.util.List[$baseType]"
+        case _ => s"java.util.List[_ <: $baseType]"
+      }
+    else
+      baseType
+  }
+
+  def rosettaMetaToJavaInterface(a: Attribute): String = {
+    val typ = a.getType
+    if (hasMetadataReference(a))
+      typ.getName match {
+        case "date" =>
+          "com.rosetta.model.metafields.BasicReferenceWithMetaDate"
+        case "string" =>
+          "com.rosetta.model.metafields.BasicReferenceWithMetaString"
+        case typeName =>
+          s"${typ.getModel.getName}.metafields.ReferenceWithMeta${toUpperFirst(typeName)}"
+      }
+    else
+      s"${typ.getModel.getName}.metafields.FieldWithMeta${toUpperFirst(typ.getName)}"
+  }
+
+  def rosettaMetaToJavaBuilder(a: Attribute): String = {
+    val typ = a.getType
+    val typeName = toUpperFirst(typ.getName)
+    if (hasMetadataReference(a))
+      typ.getName match {
+        case "date" =>
+          "com.rosetta.model.metafields.BasicReferenceWithMetaDate.BasicReferenceWithMetaDateBuilderImpl"
+        case "string" =>
+          "com.rosetta.model.metafields.BasicReferenceWithMetaString.BasicReferenceWithMetaStringBuilderImpl"
+        case typeName =>
+          val metaFieldType = s"ReferenceWithMeta${toUpperFirst(typeName)}"
+          s"${typ.getModel.getName}.metafields.$metaFieldType.${metaFieldType}BuilderImpl"
+      }
+    else
+      s"${typ.getModel.getName}.metafields.FieldWithMeta$typeName.FieldWithMeta${typeName}BuilderImpl"
   }
 
   def rosettaAttrToScalaType(a: Attribute): String = {
@@ -63,11 +107,22 @@ object GeneratorFunctions {
       case "productType" => "String" //RQualifiedType.PRODUCT_TYPE
       case "eventType" => "String" //RQualifiedType.EVENT_TYPE
       case "calculation" => "String" //RCalculationType.CALCULATION
-      case _ => s"${typ.getModel.getName}.${typ.getName}"
+      case typeName => s"${typ.getModel.getName}.$typeName"
     }
 
-  def hasMetadataAnnotation(a: Attribute): Boolean =
-    a.getAnnotations.asScala.exists(_.getAnnotation.getName == "metadata")
+  def hasMetadataAnnotation(a: Annotated): Boolean =
+    a.getAnnotations
+      .asScala
+      .exists(_.getAnnotation.getName == "metadata")
+
+  def hasMetadataReference(a: Annotated): Boolean =
+    a.getAnnotations
+      .asScala
+      .filter(_.getAnnotation.getName == "metadata")
+      .exists { annotation =>
+        val name = annotation.getAttribute.getName
+        name == "reference" || name == "address"
+      }
 
   def convertRosettaAttributeFromJavaToScalaTry(
       a: Attribute,
@@ -77,7 +132,7 @@ object GeneratorFunctions {
     val name = nameOpt.getOrElse(a.getName)
     val typeName = a.getType.getName
     val isMeta = hasMetadataAnnotation(a)
-    val customConverter = customConverterOpt.getOrElse((x: String) => s"new $typeName.ScalaConverter($x).asScala")
+    val customConverter = customConverterOpt.getOrElse((x: String) => s"new $typeName.${javaTypeClassName(typeName)}($x).asScala")
     if (isSingleOptional(a)) {
       val mapping = mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta)
       s"traverseTry(Option($name))($mapping)"
@@ -98,7 +153,7 @@ object GeneratorFunctions {
       case "calculation" => s"Success($value)" //RCalculationType.CALCULATION
       case "date" => s"Success($value.toLocalDate)"
       case "number" => s"Success(BigDecimal($value))"
-      case enum if enum.endsWith("Enum") => s"Success(new $enum.ScalaConverter($value).asScala)"
+      case enum if enum.endsWith("Enum") => s"Success(new $enum.${javaTypeClassName(typeName)}($value).asScala)"
       case _ => customConverter(value)
     }
 
@@ -108,42 +163,97 @@ object GeneratorFunctions {
       case "string" | "time" | "dateTime" | "zonedDateTime" => "Success.apply"
       case "int" => "i => Success(i: Int)"
       case "boolean" => "n => Success(n: Boolean)"
-      case "productType" | "eventType" | "calculation" if isMeta => ".map(x => Success(x.getValue))"
+      case "productType" | "eventType" | "calculation" if isMeta =>
+        ".map(x => Success(x.getValue))"
       case "productType" | "eventType" | "calculation" => "Success.apply"
       case "date" if isMeta => "d => Try(d.getValue.toLocalDate)"
       case "date" => "d => Try(d.toLocalDate)"
       case "number" if isMeta => "b => Success(BigDecimal(b.getValue))"
       case "number" => "b => Success(BigDecimal(b))"
-      case enum if enum.endsWith("Enum") && isMeta => s"e => Success(new $enum.ScalaConverter(e.getValue).asScala)"
-      case enum if enum.endsWith("Enum") => s"e => Success(new $enum.ScalaConverter(e).asScala)"
+      case enum if enum.endsWith("Enum") && isMeta =>
+        s"e => Success(new $enum.${javaTypeClassName(enum)}(e.getValue).asScala)"
+      case enum if enum.endsWith("Enum") =>
+        s"e => Success(new $enum.${javaTypeClassName(enum)}(e).asScala)"
       case _ if isMeta => s"a => ${customConverter("a.getValue")}"
       case _ => s"a => ${customConverter("a")}"
     }
 
-  def convertRosettaAttributeFromScalaToJava(a: Attribute, nameOpt: Option[String] = None): String =
-    convertScalaTypeToJava(rosettaAttrToScalaType(a), nameOpt.getOrElse(a.getName))
-
-  def convertScalaTypeToJava(typeToConvert: String, thingToConvert: String): String = {
-    typeToConvert match {
-      case s"Option[$t]" => s"$thingToConvert${mapScalaToJava(t)}.orNull"
-      case s"List[$t]" => s"$thingToConvert${mapScalaToJava(t)}.asJava"
-      case "Boolean" | "Int" | "String" | "LocalTime" | "LocalDateTime" | "ZonedDateTime" => thingToConvert
-      case "productType" | "eventType" | "calculation" => thingToConvert
-      case "BigDecimal" => s"$thingToConvert.bigDecimal"
-      case "LocalDate"  => s"com.rosetta.model.lib.records.Date.of($thingToConvert)"
-      case _ => s"new $typeToConvert.JavaConverter($thingToConvert).asJava"
-    }
+  def convertRosettaAttributeFromScalaToJava(
+      a: Attribute,
+      couldBeMeta: Boolean,
+      couldBeOption: Boolean,
+      nameOpt: Option[String] = None
+  ): String = {
+    val typeToConvert = a.getType.getName
+    val thingToConvert = nameOpt.getOrElse(a.getName)
+    val isMeta = couldBeMeta && hasMetadataAnnotation(a)
+    val isOption = couldBeOption && isSingleOptional(a)
+    val isList = isMultiple(a)
+    val metaBuilder = if (isMeta) rosettaMetaToJavaBuilder(a) else ""
+    if (isOption) {
+      if (isMeta) s"$thingToConvert${mapRosettaToJavaMeta(a, typeToConvert, metaBuilder)}.orNull"
+      else s"$thingToConvert${mapRosettaToJava(typeToConvert)}.orNull"
+    } else if (isList) {
+      if (isMeta) s"$thingToConvert${mapRosettaToJavaMeta(a, typeToConvert, metaBuilder)}.asJava"
+      else s"$thingToConvert${mapRosettaToJava(typeToConvert)}.asJava"
+    } else
+      typeToConvert match {
+        case "boolean" | "int" | "time" | "dateTime" | "zonedDateTime" => thingToConvert
+        case "date" if isMeta =>
+          s"new ${rosettaMetaToJavaBuilder(a)}().setValue(com.rosetta.model.lib.records.Date.of($thingToConvert)).build"
+        case "date" => s"com.rosetta.model.lib.records.Date.of($thingToConvert)"
+        case "string" if isMeta =>
+          s"new ${rosettaMetaToJavaBuilder(a)}().setValue($thingToConvert).build"
+        case "string" => thingToConvert
+        case "productType" | "eventType" | "calculation" if isMeta => ???
+        case "productType" | "eventType" | "calculation" => thingToConvert
+        case "number" => s"$thingToConvert.bigDecimal"
+        case _ if isMeta => generateMetaFieldImplementation(a, typeToConvert, thingToConvert)
+        case _ => s"new $typeToConvert.${scalaTypeClassName(typeToConvert)}($thingToConvert).asJava"
+      }
   }
 
-  private def mapScalaToJava(typeToConvert: String): String =
+  private def generateMetaFieldImplementation(a: Attribute, typeToConvert: String, thingToConvert: String): String = {
+    val typeToImplement = rosettaMetaToJavaInterface(a)
+    val extraMethods =
+      if (hasMetadataReference(a))
+        """          override def getExternalReference: String = null
+          |          override def getGlobalReference: String = null
+          |          override def getReference: com.rosetta.model.lib.meta.Reference = null
+          |""".stripMargin
+      else
+        "          override def getMeta: com.rosetta.model.metafields.MetaFields = null\n"
+    s"""new $typeToImplement() { metaSelf =>
+        |          override def getValue: ${rosettaTypeToJavaType(a.getType)} =
+        |            new $typeToConvert.${scalaTypeClassName(typeToConvert)}($thingToConvert).asJava
+        |          override def build: $typeToImplement = metaSelf
+        |          override def toBuilder: ${rosettaMetaToJavaBuilder(a)} = ???
+        |$extraMethods        }""".stripMargin
+  }
+
+  private def mapRosettaToJavaMeta(a: Attribute, typeToConvert: String, metaBuilder: String): String =
     typeToConvert match {
-      case "String" | "LocalTime" | "LocalDateTime" | "ZonedDateTime" => ""
+      case "string" | "time" | "dateTime" | "zonedDateTime" => s".map(t => new $metaBuilder().setValue(t).build)"
+      case "date"  => s".map(d => new $metaBuilder().setValue(com.rosetta.model.lib.records.Date.of(d)).build)"
+      case "productType" | "eventType" | "calculation" => ???
+      case "boolean" => s".map(b => new $metaBuilder().setValue(b: java.lang.Boolean).build)"
+      case "int" => s".map(i => new $metaBuilder().setValue(i: Integer).build)"
+      case "number" => s".map(b => new $metaBuilder().setValue(b.bigDecimal).build)"
+      case _ =>
+        val patMatched = "t"
+        val conversion = generateMetaFieldImplementation(a, typeToConvert, patMatched)
+        s".map($patMatched => $conversion)"
+    }
+
+  private def mapRosettaToJava(typeToConvert: String): String =
+    typeToConvert match {
+      case "string" | "time" | "dateTime" | "zonedDateTime" => ""
+      case "date"  => ".map(com.rosetta.model.lib.records.Date.of)"
       case "productType" | "eventType" | "calculation" => ""
-      case "Boolean" => ".map(b => b: java.lang.Boolean)"
-      case "Int" => ".map(i => i: Integer)"
-      case "BigDecimal" => ".map(_.bigDecimal)"
-      case "LocalDate"  => ".map(com.rosetta.model.lib.records.Date.of)"
-      case _ => s".map(t => new $typeToConvert.JavaConverter(t).asJava)"
+      case "boolean" => ".map(b => b: java.lang.Boolean)"
+      case "int" => ".map(i => i: Integer)"
+      case "number" => ".map(_.bigDecimal)"
+      case _ => s".map(t => new $typeToConvert.${scalaTypeClassName(typeToConvert)}(t).asJava)"
     }
 
   def generateExtendsClauseFromTypes(superTypes: Iterable[RosettaType]): String =
@@ -190,6 +300,12 @@ object GeneratorFunctions {
     comments.mkString("\n")
   }
 
+  def javaTypeClassName(typeName: String): String = s"Convert${typeName}ToScala"
+
+  def scalaTypeClassName(typeName: String): String = s"Convert${typeName}ToJava"
+
+  def toUpperFirst(s: String): String = s.head.toUpper + s.tail
+
   def debugFunction(f: com.regnosys.rosetta.rosetta.simple.Function): String =
     s"""$f
        |  getName ${f.getName}
@@ -198,41 +314,42 @@ object GeneratorFunctions {
        |  getOutput ${f.getOutput}
        |  getConditions ${f.getConditions.asScala}
        |  getPostConditions ${f.getPostConditions.asScala}
-       |  getAnnotations ${f.getAnnotations.asScala.map(debugAnnotationRef)}
+       |  getAnnotations ${f.getAnnotations.asScala.map(debugAnnotationRef("    "))}
        |  getReferences ${f.getReferences.asScala}
        |  getOperations ${f.getOperations.asScala}
        |  getShortcuts ${f.getShortcuts.asScala}
        |""".stripMargin
 
-  def debugAnnotationRef(a: AnnotationRef): String =
-    s"""$a
-       | getQualifiers ${a.getQualifiers.asScala}
-       | getAnnotation ${debugAnnotation(a.getAnnotation)}
+  def debugAnnotationRef(indent: String)(a: AnnotationRef): String =
+    s"""$indent$a
+       |$indent  getAttribute ${a.getAttribute}
+       |$indent  getQualifiers ${a.getQualifiers.asScala}
+       |$indent  getAnnotation ${debugAnnotation(indent + "  ")(a.getAnnotation)}
        |""".stripMargin
 
-  def debugAnnotation(a: Annotation): String =
-    s"""$a
-       | eIsProxy ${a.eIsProxy}
-       | getName ${a.getName}
-       | getDefinition ${a.getDefinition}
-       | getAttributes ${a.getAttributes.asScala}
-       | getModel ${a.getModel}
-       | getPrefix ${a.getPrefix}
-       | getAnnotations ${a.getAnnotations.asScala.map(debugAnnotationRef)}
+  def debugAnnotation(indent: String)(a: Annotation): String =
+    s"""$indent$a
+       |$indent  eIsProxy ${a.eIsProxy}
+       |$indent  getName ${a.getName}
+       |$indent  getDefinition ${a.getDefinition}
+       |$indent  getAttributes ${a.getAttributes.asScala}
+       |$indent  getModel ${a.getModel}
+       |$indent  getPrefix ${a.getPrefix}
+       |$indent  getAnnotations ${a.getAnnotations.asScala.map(debugAnnotationRef(indent + "  "))}
        |""".stripMargin
 
-  def debugAttribute(a: Attribute): String =
-    s"""$a
-       | getName ${a.getName}
-       | getType ${a.getType}
-       | getDefinition ${a.getDefinition}
-       | getCard ${a.getCard}
-       | getAnnotations ${a.getAnnotations.asScala.map(debugAnnotationRef)}
-       | isOverride ${a.isOverride}
-       | isOnlyElement ${a.isOnlyElement}
-       | isIsTypeInferred ${a.isIsTypeInferred}
-       | getSynonyms ${a.getSynonyms.asScala}
-       | getRuleReference ${a.getRuleReference}
-       | getReferences ${a.getReferences}
+  def debugAttribute(indent: String)(a: Attribute): String =
+    s"""$indent$a
+       |$indent  getName ${a.getName}
+       |$indent  getType ${a.getType}
+       |$indent  getDefinition ${a.getDefinition}
+       |$indent  getCard ${a.getCard}
+       |$indent  getAnnotations ${a.getAnnotations.asScala.map(debugAnnotationRef(indent + "  "))}
+       |$indent  isOverride ${a.isOverride}
+       |$indent  isOnlyElement ${a.isOnlyElement}
+       |$indent  isIsTypeInferred ${a.isIsTypeInferred}
+       |$indent  getSynonyms ${a.getSynonyms.asScala}
+       |$indent  getRuleReference ${a.getRuleReference}
+       |$indent  getReferences ${a.getReferences}
        |""".stripMargin
 }

@@ -84,7 +84,7 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
     val javaClass = s"${e.getModel.getName}.functions.${e.getName}"
     val paramConversions =
       params
-        .map(p => convertRosettaAttributeFromScalaToJava(p))
+        .map(p => convertRosettaAttributeFromScalaToJava(p, couldBeMeta = false, couldBeOption = true))
         .mkString(", ")
     s"injector.getInstance(classOf[$javaClass]).evaluate($paramConversions)"
   }

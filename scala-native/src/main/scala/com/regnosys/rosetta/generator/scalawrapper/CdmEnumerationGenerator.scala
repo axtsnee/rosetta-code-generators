@@ -58,13 +58,13 @@ case class CdmEnumerationGenerator(
     val javaMatchStatements = allEnumValues.map(matchOnJavaValue(e)).mkString("\n")
     s"""object $name {
        |$inheritedVals$caseObjects
-       |  implicit class JavaConverter(x: $name) {
+       |  implicit class ${scalaTypeClassName(name)}(x: $name) {
        |    def asJava: $javaName = x match {
        |$scalaMatchStatements
        |    }
        |  }
        |
-       |  implicit class ScalaConverter(x: $javaName) {
+       |  implicit class ${javaTypeClassName(name)}(x: $javaName) {
        |    def asScala: $name = x match {
        |$javaMatchStatements
        |    }
