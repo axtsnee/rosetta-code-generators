@@ -1,10 +1,10 @@
-package com.regnosys.rosetta.generator.scalawrapper
+package com.regnosys.rosetta.generator.scalanative
 
 import java.nio.file.{Files, Path}
 import java.util.Collections
 import scala.jdk.CollectionConverters._
 import scala.util.Using
-import com.regnosys.rosetta.generator.scalawrapper.ScalaNativeGenerator.afterGenerate
+import ScalaNativeGenerator.afterGenerate
 import com.regnosys.rosetta.generators.test.TestHelper
 
 object ParserHelper {

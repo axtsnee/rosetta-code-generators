@@ -1,4 +1,4 @@
-package com.regnosys.rosetta.generator.scalawrapper
+package com.regnosys.rosetta.generator.scalanative
 
 import com.regnosys.rosetta.rosetta.simple.{Data, Function}
 import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaRootElement}

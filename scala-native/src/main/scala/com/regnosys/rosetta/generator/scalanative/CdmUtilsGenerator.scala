@@ -1,8 +1,10 @@
-package com.regnosys.rosetta.generator.scalawrapper
+package com.regnosys.rosetta.generator.scalanative
 
 object CdmUtilsGenerator {
   val generateFile: String =
-    """import scala.annotation.tailrec
+    s"""package ${AbstractCdmGenerator.basePackage}
+      |
+      |import scala.annotation.tailrec
       |import scala.jdk.CollectionConverters._
       |import scala.util.{Try, Success, Failure}
       |

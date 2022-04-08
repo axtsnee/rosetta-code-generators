@@ -1,4 +1,4 @@
-package com.regnosys.rosetta.generator.scalawrapper
+package com.regnosys.rosetta.generator.scalanative
 
 import scala.jdk.CollectionConverters._
 import com.regnosys.rosetta.rosetta.{RosettaEnumValue, RosettaEnumeration, RosettaType}
@@ -44,7 +44,7 @@ case class CdmEnumerationGenerator(
     }
 
   private def generateSealedTrait(e: RosettaEnumeration): String =
-    s"${generateOptionalComment(e)}sealed trait ${e.getName}\n"
+    s"${generateOptionalComment(e, "  ")}  sealed trait ${e.getName}\n"
 
   private def generateCompanionObject(e: RosettaEnumeration, extendingEnums: Iterable[RosettaEnumeration]): String = {
     val name = e.getName
@@ -56,21 +56,20 @@ case class CdmEnumerationGenerator(
     val allEnumValues = enumValuesByAncestor.keys ++ enumValues
     val scalaMatchStatements = allEnumValues.map(matchOnScalaValue(e)).mkString("\n")
     val javaMatchStatements = allEnumValues.map(matchOnJavaValue(e)).mkString("\n")
-    s"""object $name {
+    s"""  object $name {
        |$inheritedVals$caseObjects
-       |  implicit class ${scalaTypeClassName(name)}(x: $name) {
-       |    def asJava: $javaName = x match {
+       |    implicit class ${scalaTypeClassName(name)}(x: $name) {
+       |      def asJava: $javaName = x match {
        |$scalaMatchStatements
+       |      }
        |    }
-       |  }
        |
-       |  implicit class ${javaTypeClassName(name)}(x: $javaName) {
-       |    def asScala: $name = x match {
+       |    implicit class ${javaTypeClassName(name)}(x: $javaName) {
+       |      def asScala: $name = x match {
        |$javaMatchStatements
+       |      }
        |    }
-       |  }
-       |}
-       |""".stripMargin
+       |  }""".stripMargin
   }
 
   private def matchOnScalaValue(e: RosettaEnumeration)(v: RosettaEnumValue): String = {
@@ -81,11 +80,11 @@ case class CdmEnumerationGenerator(
         v.getName
       else
         s"`${v.getName}`"
-    s"      case $pattern => ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)}"
+    s"        case $pattern => ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)}"
   }
 
   private def matchOnJavaValue(e: RosettaEnumeration)(v: RosettaEnumValue): String =
-    s"      case ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)} => ${v.getName}"
+    s"        case ${rosettaTypeToJavaType(e)}.${EnumHelper.formatEnumName(v.getName)} => ${v.getName}"
 
   private def getValuesByAncestor(e: RosettaEnumeration): Map[RosettaEnumValue, RosettaEnumeration] = {
     def loop(enumOpt: Option[RosettaEnumeration]): Map[RosettaEnumValue, RosettaEnumeration] = enumOpt match {
@@ -97,19 +96,19 @@ case class CdmEnumerationGenerator(
   }
 
   private def generateVal(superTrait: RosettaType, inheritedValues: Map[RosettaEnumValue, RosettaEnumeration])(e: RosettaEnumValue): String = {
-    val comment = generateOptionalComment(e, "  ")
+    val comment = generateOptionalComment(e, "    ")
     val valName = e.getName
     val ancestor = inheritedValues(e)
-    s"$comment  val $valName: ${superTrait.getName} = ${ancestor.getName}.$valName\n"
+    s"$comment    val $valName: ${superTrait.getName} = ${ancestor.getName}.$valName\n"
   }
 
   private def generateCaseObject(superTrait: RosettaEnumeration, extendingEnums: Iterable[RosettaEnumeration])(e: RosettaEnumValue): String = {
-    val comment = generateOptionalComment(e, "  ")
+    val comment = generateOptionalComment(e, "    ")
     val extending = generateExtendsClauseFromTypes(superTrait :: extendingEnums.toList)
-    s"$comment  case object ${e.getName}$extending\n"
+    s"$comment    case object ${e.getName}$extending\n"
   }
 }
 object CdmEnumerationGenerator {
   def derivePackageName(e: RosettaEnumeration): String =
-    s"${AbstractCdmGenerator.basePkg}.${e.getModel.getName}.enums"
+    s"${AbstractCdmGenerator.deriveParentPackage(e)}.enums"
 }

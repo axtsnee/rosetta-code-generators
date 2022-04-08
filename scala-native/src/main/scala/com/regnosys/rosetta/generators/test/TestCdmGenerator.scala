@@ -3,13 +3,11 @@ package com.regnosys.rosetta.generators.test
 import java.io.{File, FileInputStream}
 import java.nio.file.{Files, Paths}
 import java.nio.charset.Charset
-
 import scala.jdk.CollectionConverters._
-
 import com.google.common.io.Resources
 import com.google.inject.Injector
 import com.regnosys.rosetta.generator.external.AbstractExternalGenerator
-import com.regnosys.rosetta.generator.scalawrapper.ScalaNativeGenerator
+import com.regnosys.rosetta.generator.scalanative.ScalaNativeGenerator
 import com.regnosys.rosetta.rosetta.RosettaModel
 import org.apache.commons.io.IOUtils
 import org.eclipse.emf.common.util.URI

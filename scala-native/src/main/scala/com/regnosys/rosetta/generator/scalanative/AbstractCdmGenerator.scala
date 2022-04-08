@@ -1,8 +1,7 @@
-package com.regnosys.rosetta.generator.scalawrapper
+package com.regnosys.rosetta.generator.scalanative
 
-import com.regnosys.rosetta.generator.scalawrapper.AbstractCdmGenerator.deriveAnyPackageName
-
-import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaNamed, RosettaRootElement}
+import AbstractCdmGenerator.deriveAnyPackageName
+import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaModel, RosettaNamed, RosettaRootElement}
 import com.regnosys.rosetta.rosetta.simple.{Data, Function}
 
 abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
@@ -31,10 +30,11 @@ abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
         generateDeps(es)
           .map(i => s"  import $i")
           .mkString("\n")
-      val code = es.map(translate).mkString
+      val prettyImports =
+        if (importStatements.isEmpty) "" else importStatements + "\n\n"
+      val code = es.map(translate).mkString("\n")
       s"""package $pkg {
-         |$importStatements
-         |$code
+         |$prettyImports$code
          |}
          |""".stripMargin
   }
@@ -55,7 +55,6 @@ abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
        |  */
        |import java.time._
        |
-       |import scala.annotation.tailrec
        |import scala.jdk.CollectionConverters._
        |import scala.math.BigDecimal
        |import scala.util.{Try, Success, Failure}
@@ -63,12 +62,19 @@ abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
        |import com.google.inject.Injector
        |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
        |import com.regnosys.rosetta.common.validation.ValidationReport
-       |import Utils._
+       |import ${AbstractCdmGenerator.basePackage}.Utils._
+       |
        |""".stripMargin
   }
 }
 object AbstractCdmGenerator {
-  val basePkg: String = "org.isda.scala"
+  val basePackage = "org.isda.cdm.scalanative"
+
+  def deriveParentPackage(e: RosettaRootElement): String = {
+    val ns = e.getModel.getName
+    val subpkg = ns.substring(ns.indexOf('.') + 1)
+    s"$basePackage.$subpkg"
+  }
 
   def deriveAnyPackageName(r: RosettaRootElement): String = r match {
     case e: RosettaEnumeration => CdmEnumerationGenerator.derivePackageName(e)

@@ -1,4 +1,4 @@
-package com.regnosys.rosetta.generator.scalawrapper
+package com.regnosys.rosetta.generator.scalanative
 
 import java.util.{Collections, Collection => JCollection, List => JList, Map => JMap}
 import scala.jdk.CollectionConverters._

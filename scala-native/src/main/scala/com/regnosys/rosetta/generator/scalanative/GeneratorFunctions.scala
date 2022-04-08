@@ -1,4 +1,4 @@
-package com.regnosys.rosetta.generator.scalawrapper
+package com.regnosys.rosetta.generator.scalanative
 
 import scala.jdk.CollectionConverters._
 
@@ -217,18 +217,18 @@ object GeneratorFunctions {
     val typeToImplement = rosettaMetaToJavaInterface(a)
     val extraMethods =
       if (hasMetadataReference(a))
-        """          override def getExternalReference: String = null
-          |          override def getGlobalReference: String = null
-          |          override def getReference: com.rosetta.model.lib.meta.Reference = null
+        """              override def getExternalReference: String = null
+          |              override def getGlobalReference: String = null
+          |              override def getReference: com.rosetta.model.lib.meta.Reference = null
           |""".stripMargin
       else
-        "          override def getMeta: com.rosetta.model.metafields.MetaFields = null\n"
+        "              override def getMeta: com.rosetta.model.metafields.MetaFields = null\n"
     s"""new $typeToImplement() { metaSelf =>
-        |          override def getValue: ${rosettaTypeToJavaType(a.getType)} =
-        |            new $typeToConvert.${scalaTypeClassName(typeToConvert)}($thingToConvert).asJava
-        |          override def build: $typeToImplement = metaSelf
-        |          override def toBuilder: ${rosettaMetaToJavaBuilder(a)} = ???
-        |$extraMethods        }""".stripMargin
+        |              override def getValue: ${rosettaTypeToJavaType(a.getType)} =
+        |                new $typeToConvert.${scalaTypeClassName(typeToConvert)}($thingToConvert).asJava
+        |              override def build: $typeToImplement = metaSelf
+        |              override def toBuilder: ${rosettaMetaToJavaBuilder(a)} = ???
+        |$extraMethods            }""".stripMargin
   }
 
   private def mapRosettaToJavaMeta(a: Attribute, typeToConvert: String, metaBuilder: String): String =
@@ -280,23 +280,23 @@ object GeneratorFunctions {
       case _ => ""
     }
 
-  def generatePartialClassComment(e: RosettaDefinable): String = {
+  def generatePartialClassComment(e: RosettaDefinable, indent: String = ""): String = {
     Option(e.getDefinition) match {
       case Some(defn) if defn.nonEmpty =>
-        s"""/** $defn
-           |  *
+        s"""$indent/** $defn
+           |$indent  *
            |""".stripMargin
       case _ => "/**\n"
     }
   }
 
-  def generateParamComments(attributes: Iterable[Attribute]): String = {
+  def generateParamComments(attributes: Iterable[Attribute], indent: String = ""): String = {
     val comments =
       for {
         attr <- attributes
         defnOpt = Option(attr.getDefinition)
         if defnOpt.exists(_.nonEmpty)
-      } yield s"""  * @param ${attr.getName} ${defnOpt.getOrElse("")}"""
+      } yield s"""$indent  * @param ${attr.getName} ${defnOpt.getOrElse("")}"""
     comments.mkString("\n")
   }
 

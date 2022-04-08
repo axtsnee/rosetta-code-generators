@@ -1,8 +1,8 @@
-package com.regnosys.rosetta.generator.scalawrapper
+package com.regnosys.rosetta.generator.scalanative
 
 import scala.jdk.CollectionConverters._
 
-import com.regnosys.rosetta.generator.scalawrapper.GeneratorFunctions._
+import GeneratorFunctions._
 import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
 import com.regnosys.rosetta.rosetta.RosettaType
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Function}
@@ -35,9 +35,11 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
         val params = e.getInputs.asScala
         val comment =
           if (params.flatMap(a => Option(a.getDefinition)).isEmpty)
-            generateOptionalComment(e)
+            generateOptionalComment(e, "  ")
           else
-            generatePartialClassComment(e) + generateParamComments(params) + generateOutputComment(output) + "\n  */\n"
+            generatePartialClassComment(e, "  ") +
+              generateParamComments(params, "  ") +
+              generateOutputComment(output) + "\n    */\n"
         val paramDecls = params.map { p =>
           s"${p.getName}: ${rosettaAttrToScalaType(p)}"
         }
@@ -45,20 +47,20 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
         val rawOutputType = rosettaAttrToJavaType(output)
         val convertedOutputType = rosettaAttrToScalaType(output)
         val convertResult = convertRosettaAttributeFromJavaToScalaTry(output, Some("result"), Some((x: String) => s"$converterParmName($x)"))
-        s"""${comment}object ${e.getName} {
-           |  def apply(
-           |    ${paramDecls.mkString(", ")}
-           |  )(
-           |    implicit injector: Injector, validate: $rawOutputType => ValidationReport$extraImplicits
-           |  ): Try[$convertedOutputType] =
-           |    for {
-           |      result <- Try($javaFunctionCall)
-           |      validation = validate(result)
-           |      returnValue <-
-           |        if (validation.success) $convertResult
-           |        else Failure(new IllegalStateException(validation.validationFailures.asScala.mkString("; ")))
-           |    } yield returnValue
-           |}
+        s"""$comment  object ${e.getName} {
+           |    def apply(
+           |      ${paramDecls.mkString(", ")}
+           |    )(
+           |      implicit injector: Injector, validate: $rawOutputType => ValidationReport$extraImplicits
+           |    ): Try[$convertedOutputType] =
+           |      for {
+           |        result <- Try($javaFunctionCall)
+           |        validation = validate(result)
+           |        returnValue <-
+           |          if (validation.success) $convertResult
+           |          else Failure(new IllegalStateException(validation.validationFailures.asScala.mkString("; ")))
+           |      } yield returnValue
+           |  }
            |""".stripMargin
     }
   }
@@ -75,7 +77,7 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
   }
 
   private def generateOutputComment(output: Attribute): String =
-    Option(output.getDefinition).map(d => s"\n  * @return $d").getOrElse("")
+    Option(output.getDefinition).map(d => s"\n    * @return $d").getOrElse("")
 
   private def generateJavaFunctionCall(
       e: Function,
@@ -91,5 +93,5 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
 }
 object CdmFunctionGenerator {
   def derivePackageName(e: Function): String =
-    s"${AbstractCdmGenerator.basePkg}.${e.getModel.getName}.functions"
+    s"${AbstractCdmGenerator.deriveParentPackage(e)}.functions"
 }

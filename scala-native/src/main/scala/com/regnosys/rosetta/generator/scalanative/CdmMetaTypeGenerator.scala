@@ -1,0 +1,25 @@
+package com.regnosys.rosetta.generator.scalanative
+
+import com.regnosys.rosetta.rosetta.{RosettaMetaType, RosettaNamed, RosettaRootElement}
+import GeneratorFunctions._
+
+case class CdmMetaTypeGenerator(analysis: RootElementAnalyzer)
+  extends AbstractCdmGenerator(analysis.metaTypes) {
+
+  override val dependencies: RosettaMetaType => Iterable[RosettaRootElement with RosettaNamed] =
+    _ => Nil
+
+  override val derivePackageName: RosettaMetaType => String =
+    CdmMetaTypeGenerator.derivePackageName
+
+  override val translate: RosettaMetaType => String = e => {
+    s"""  class Unimplemented_${e.getName} {
+       |    val value: ${rosettaTypeToScalaType(e.getType)} = ???
+       |  }
+       |""".stripMargin
+  }
+}
+object CdmMetaTypeGenerator {
+  def derivePackageName(e: RosettaMetaType): String =
+    s"${AbstractCdmGenerator.deriveParentPackage(e)}.metas"
+}
