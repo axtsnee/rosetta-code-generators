@@ -46,7 +46,12 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
         val javaFunctionCall = generateJavaFunctionCall(e, params)
         val rawOutputType = rosettaAttrToJavaType(output)
         val convertedOutputType = rosettaAttrToScalaType(output)
-        val convertResult = convertRosettaAttributeFromJavaToScalaTry(output, Some("result"), Some((x: String) => s"$converterParmName($x)"))
+        val convertResult =
+          convertRosettaAttributeFromJavaToScalaTry(
+            output,
+            nameOpt = Some("result"),
+            customConverterOpt = Some((x: String) => s"$converterParmName($x)")
+          )
         s"""$comment  object ${e.getName} {
            |    def apply(
            |      ${paramDecls.mkString(", ")}

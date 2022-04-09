@@ -126,57 +126,98 @@ object GeneratorFunctions {
 
   def convertRosettaAttributeFromJavaToScalaTry(
       a: Attribute,
+      lookupTableNameOpt: Option[String] = None,
       nameOpt: Option[String] = None,
       customConverterOpt: Option[String => String] = None
   ): String = {
     val name = nameOpt.getOrElse(a.getName)
     val typeName = a.getType.getName
+    val lookupTableName = lookupTableNameOpt match {
+      case Some(n) => s"($n)"
+      case None => ""
+    }
     val isMeta = hasMetadataAnnotation(a)
-    val customConverter = customConverterOpt.getOrElse((x: String) => s"new $typeName.${javaTypeClassName(typeName)}($x).asScala")
+    val customConverter = customConverterOpt.getOrElse { (x: String) =>
+      s"new $typeName.${javaTypeClassName(typeName)}($x).asScala$lookupTableName"
+    }
     if (isSingleOptional(a)) {
-      val mapping = mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta)
+      val mapping =
+        mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta, lookupTableNameOpt)
       s"traverseTry(Option($name))($mapping)"
     } else if (isMultiple(a)) {
-      val mapping = mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta)
+      val mapping =
+        mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta, lookupTableNameOpt)
       s"traverseTry(Option($name.asScala).getOrElse(Nil).toList)($mapping)"
     } else {
-      val value = if (isMeta) s"$name.getValue" else name
-      convertRosettaTypeFromJavaToScalaTry(typeName, value, customConverter)
+      val value =
+        if (hasMetadataReference(a) && lookupTableNameOpt.isDefined)
+          s"lookupReference($name, $lookupTableName)"
+        else if (isMeta)
+          s"Success($name.getValue)"
+        else
+          s"Success($name)"
+      convertRosettaTypeFromJavaTryToScalaTry(typeName, value, customConverter)
     }
   }
 
-  def convertRosettaTypeFromJavaToScalaTry(typeName: String, value: String, customConverter: String => String): String =
+  def convertRosettaTypeFromJavaTryToScalaTry(
+      typeName: String,
+      value: String,
+      customConverter: String => String
+  ): String =
     typeName match {
-      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" => s"Success($value)"
-      case "productType" => s"Success($value)" //RQualifiedType.PRODUCT_TYPE
-      case "eventType" => s"Success($value)" //RQualifiedType.EVENT_TYPE
-      case "calculation" => s"Success($value)" //RCalculationType.CALCULATION
-      case "date" => s"Success($value.toLocalDate)"
-      case "number" => s"Success(BigDecimal($value))"
-      case enum if enum.endsWith("Enum") => s"Success(new $enum.${javaTypeClassName(typeName)}($value).asScala)"
-      case _ => customConverter(value)
+      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" => value
+      case "productType" => value //RQualifiedType.PRODUCT_TYPE
+      case "eventType" => value //RQualifiedType.EVENT_TYPE
+      case "calculation" => value //RCalculationType.CALCULATION
+      case "date" => s"$value.map(_.toLocalDate)"
+      case "number" => s"$value.map(BigDecimal.apply)"
+      case enum if enum.endsWith("Enum") =>
+        s"$value.map(v => new $enum.${javaTypeClassName(typeName)}(v).asScala)"
+      case _ => s"$value.flatMap(v => ${customConverter("v")})"
     }
 
-  private def mapRosettaAttributeFromJavaToScalaTry(a: Attribute, customConverter: String => String, isMeta: Boolean): String =
+  private def mapRosettaAttributeFromJavaToScalaTry(
+      a: Attribute,
+      customConverter: String => String,
+      isMeta: Boolean,
+      lookupTableNameOpt: Option[String] = None
+  ): String = {
+    val lookupTableName = lookupTableNameOpt.getOrElse("")
+    val isReference = hasMetadataReference(a)
     a.getType.getName match {
-      case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" if isMeta => "x => Success(x.getValue)"
-      case "string" | "time" | "dateTime" | "zonedDateTime" => "Success.apply"
+      case "int" | "boolean" | "string" | "time" | "dateTime" | "zonedDateTime" if isReference && lookupTableNameOpt.isDefined =>
+        s"x => lookupReference(x, $lookupTableName)"
+      case "int" | "boolean" | "string" | "time" | "dateTime" | "zonedDateTime" if isMeta =>
+        "x => Success(x.getValue)"
       case "int" => "i => Success(i: Int)"
       case "boolean" => "n => Success(n: Boolean)"
+      case "string" | "time" | "dateTime" | "zonedDateTime" => "Success.apply"
+      case "productType" | "eventType" | "calculation" if isReference && lookupTableNameOpt.isDefined =>
+        s".map(x => lookupReference(x, $lookupTableName))"
       case "productType" | "eventType" | "calculation" if isMeta =>
         ".map(x => Success(x.getValue))"
       case "productType" | "eventType" | "calculation" => "Success.apply"
+      case "date" if isReference && lookupTableNameOpt.isDefined =>
+        s"d => lookupReference(d, $lookupTableName).map(_.toLocalDate)"
       case "date" if isMeta => "d => Try(d.getValue.toLocalDate)"
       case "date" => "d => Try(d.toLocalDate)"
+      case "number" if isReference && lookupTableNameOpt.isDefined =>
+        s"r => lookupReference(r, $lookupTableName).map(BigDecimal.apply)"
       case "number" if isMeta => "b => Success(BigDecimal(b.getValue))"
       case "number" => "b => Success(BigDecimal(b))"
+      case enum if enum.endsWith("Enum") && isReference && lookupTableNameOpt.isDefined =>
+        s"e => lookupReference(e, $lookupTableName).map(r => new $enum.${javaTypeClassName(enum)}(r).asScala)"
       case enum if enum.endsWith("Enum") && isMeta =>
         s"e => Success(new $enum.${javaTypeClassName(enum)}(e.getValue).asScala)"
       case enum if enum.endsWith("Enum") =>
         s"e => Success(new $enum.${javaTypeClassName(enum)}(e).asScala)"
-      case _ if isMeta => s"a => ${customConverter("a.getValue")}"
+      case _ if isReference && lookupTableNameOpt.isDefined =>
+        s"""a => lookupReference(a, $lookupTableName).flatMap(b => ${customConverter("b")})"""
+      case _ if isMeta => s"""a => ${customConverter("a.getValue")}"""
       case _ => s"a => ${customConverter("a")}"
     }
+  }
 
   def convertRosettaAttributeFromScalaToJava(
       a: Attribute,

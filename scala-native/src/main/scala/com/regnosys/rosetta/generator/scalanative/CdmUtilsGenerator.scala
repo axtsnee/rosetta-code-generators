@@ -6,11 +6,13 @@ object CdmUtilsGenerator {
       |
       |import scala.annotation.tailrec
       |import scala.jdk.CollectionConverters._
+      |import scala.reflect.ClassTag
       |import scala.util.{Try, Success, Failure}
       |
       |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
       |import com.regnosys.rosetta.common.validation.ValidationReport
       |import com.rosetta.model.lib.RosettaModelObject
+      |import com.rosetta.model.lib.meta.ReferenceWithMeta
       |
       |object Utils {
       |  def traverseTry[A, B](as: List[A])(f: A => Try[B]): Try[List[B]] = {
@@ -31,6 +33,29 @@ object CdmUtilsGenerator {
       |    o match {
       |      case None    => Success(None)
       |      case Some(a) => f(a).map(Some.apply)
+      |    }
+      |
+      |  def lookupReference[T : ClassTag](
+      |      r: ReferenceWithMeta[T],
+      |      lookupTable: Map[String, List[_]]
+      |  ): Try[T] =
+      |    Option(r.getValue).orElse {
+      |      for {
+      |        k <- Option(r.getGlobalReference).orElse(
+      |            Option(r.getReference).map(_.getReference)
+      |          )
+      |        vs <- lookupTable.get(k)
+      |        v <- vs.flatMap {
+      |            case referent: T => Some(referent)
+      |            case _ => None
+      |          }
+      |          .headOption
+      |      } yield v
+      |    } match {
+      |      case Some(t) => Success(t)
+      |      case None =>
+      |        val typ = implicitly[ClassTag[T]].runtimeClass
+      |        Failure(new Exception(s"Could not find the $$typ referent of $$r."))
       |    }
       |
       |  implicit def validateSingle(

@@ -62,6 +62,7 @@ abstract class AbstractCdmGenerator[T <: RosettaRootElement with RosettaNamed](
        |import com.google.inject.Injector
        |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
        |import com.regnosys.rosetta.common.validation.ValidationReport
+       |import ${AbstractCdmGenerator.basePackage}._
        |import ${AbstractCdmGenerator.basePackage}.Utils._
        |
        |""".stripMargin
