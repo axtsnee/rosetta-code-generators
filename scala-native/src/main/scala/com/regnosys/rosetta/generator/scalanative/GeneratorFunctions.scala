@@ -347,6 +347,8 @@ object GeneratorFunctions {
 
   def toUpperFirst(s: String): String = s.head.toUpper + s.tail
 
+  def toLowerFirst(s: String): String = s.head.toLower + s.tail
+
   def debugFunction(f: com.regnosys.rosetta.rosetta.simple.Function): String =
     s"""$f
        |  getName ${f.getName}

@@ -44,33 +44,73 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
           s"${p.getName}: ${rosettaAttrToScalaType(p)}"
         }
         val javaFunctionCall = generateJavaFunctionCall(e, params)
-        val rawOutputType = rosettaAttrToJavaType(output)
         val convertedOutputType = rosettaAttrToScalaType(output)
-        val convertResult =
-          convertRosettaAttributeFromJavaToScalaTry(
-            output,
-            nameOpt = Some("result"),
-            customConverterOpt = Some((x: String) => s"$converterParmName($x)")
-          )
-        s"""$comment  object ${e.getName} {
-           |    def apply(
-           |      ${paramDecls.mkString(", ")}
-           |    )(
-           |      implicit injector: Injector, validate: $rawOutputType => ValidationReport$extraImplicits
-           |    ): Try[$convertedOutputType] =
-           |      for {
-           |        result <- Try($javaFunctionCall)
-           |        validation = validate(result)
-           |        returnValue <-
-           |          if (validation.success) $convertResult
-           |          else Failure(new IllegalStateException(validation.validationFailures.asScala.mkString("; ")))
-           |      } yield returnValue
-           |  }
-           |""".stripMargin
+        if (RosettaAttributeExtensions.isBuiltInType(output.getType))
+          generateFunctionCall(e.getName, comment, paramDecls, output, extraImplicits, convertedOutputType, javaFunctionCall)
+        else
+          generateValidatingFunctionCall(e.getName, comment, paramDecls, output, extraImplicits, convertedOutputType, javaFunctionCall)
     }
   }
 
-  private def generateImplicitParams(output: Attribute): String = {
+  private def generateFunctionCall(
+      functionName: String,
+      comment: String,
+      paramDecls: Iterable[String],
+      output: Attribute,
+      extraImplicits: String,
+      convertedOutputType: String,
+      javaFunctionCall: String
+  ): String = {
+    val convertResult =
+      convertRosettaAttributeFromJavaToScalaTry(
+        output,
+        nameOpt = Some(javaFunctionCall),
+        customConverterOpt = Some((x: String) => s"$converterParmName($x)")
+      )
+    s"""$comment  object $functionName {
+       |    def apply(
+       |      ${paramDecls.mkString(", ")}
+       |    )(
+       |      implicit injector: Injector$extraImplicits
+       |    ): Try[$convertedOutputType] =
+       |      $convertResult
+       |  }
+       |""".stripMargin
+  }
+
+  private def generateValidatingFunctionCall(
+      functionName: String,
+      comment: String,
+      paramDecls: Iterable[String],
+      output: Attribute,
+      extraImplicits: String,
+      convertedOutputType: String,
+      javaFunctionCall: String
+  ): String = {
+    val convertResult =
+      convertRosettaAttributeFromJavaToScalaTry(
+        output,
+        nameOpt = Some("result"),
+        customConverterOpt = Some((x: String) => s"$converterParmName($x)")
+      )
+    s"""$comment  object $functionName {
+       |    def apply(
+       |      ${paramDecls.mkString(", ")}
+       |    )(
+       |      implicit injector: Injector, validate: ${rosettaAttrToJavaType(output)} => ValidationReport$extraImplicits
+       |    ): Try[$convertedOutputType] =
+       |      for {
+       |        result <- Try($javaFunctionCall)
+       |        validation = validate(result)
+       |        returnValue <-
+       |          if (validation.success) $convertResult
+       |          else Failure(new IllegalStateException(validation.validationFailures.asScala.mkString("; ")))
+       |      } yield returnValue
+       |  }
+       |""".stripMargin
+  }
+
+  private def generateImplicitParams(output: Attribute): String =
     output.getType.getName match {
       case "string" | "int" | "boolean" | "time" | "dateTime" | "zonedDateTime" | "date" | "number" => ""
       case "productType" | "eventType" | "calculation" => ""
@@ -79,7 +119,6 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
         val fromType = rosettaTypeToJavaType(output.getType)
         s", $converterParmName: $fromType => Try[$customType]"
     }
-  }
 
   private def generateOutputComment(output: Attribute): String =
     Option(output.getDefinition).map(d => s"\n    * @return $d").getOrElse("")

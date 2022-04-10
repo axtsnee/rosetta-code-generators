@@ -9,10 +9,37 @@ object CdmUtilsGenerator {
       |import scala.reflect.ClassTag
       |import scala.util.{Try, Success, Failure}
       |
+      |import com.google.inject.{Guice, Injector}
       |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
       |import com.regnosys.rosetta.common.validation.ValidationReport
       |import com.rosetta.model.lib.RosettaModelObject
       |import com.rosetta.model.lib.meta.ReferenceWithMeta
+      |import org.isda.cdm.CdmRuntimeModule
+      |
+      |object implicits {
+      |  implicit val injector: Injector =
+      |    Guice.createInjector(new CdmRuntimeModule())
+      |
+      |  implicit def validator(implicit injector: Injector): RosettaTypeValidator =
+      |    injector.getInstance(classOf[RosettaTypeValidator])
+      |
+      |  implicit def validateSingle(
+      |    implicit validator: RosettaTypeValidator
+      |  ): RosettaModelObject => ValidationReport =
+      |    m => { validator.runProcessStep(m.getClass, m) }
+      |
+      |  implicit def validateList(
+      |    implicit validator: RosettaTypeValidator
+      |  ): java.util.List[_ <: RosettaModelObject] => ValidationReport = ms => {
+      |    val failures = ms.asScala.flatMap { m =>
+      |      validator
+      |        .runProcessStep(m.getClass, m)
+      |        .validationFailures
+      |        .asScala
+      |    }
+      |    new ValidationReport(null, failures.asJava)
+      |  }
+      |}
       |
       |object Utils {
       |  def traverseTry[A, B](as: List[A])(f: A => Try[B]): Try[List[B]] = {
@@ -57,26 +84,6 @@ object CdmUtilsGenerator {
       |        val typ = implicitly[ClassTag[T]].runtimeClass
       |        Failure(new Exception(s"Could not find the $$typ referent of $$r."))
       |    }
-      |
-      |  implicit def validateSingle(
-      |    implicit validator: RosettaTypeValidator
-      |  ): RosettaModelObject => ValidationReport =
-      |    m => { validator.runProcessStep(m.getClass, m.toBuilder) }
-      |
-      |  implicit def validateList(
-      |    implicit validator: RosettaTypeValidator
-      |  ): java.util.List[_ <: RosettaModelObject] => ValidationReport = ms => {
-      |    val failures = ms.asScala.flatMap { m =>
-      |      validator
-      |        .runProcessStep(m.getClass, m.toBuilder)
-      |        .validationFailures
-      |        .asScala
-      |    }
-      |    new ValidationReport(null, failures.asJava)
-      |  }
-      |
-      |  implicit val noOp: AnyRef => ValidationReport =
-      |    _ => { new ValidationReport(null, java.util.Collections.emptyList) }
       |}
       |""".stripMargin
 }
