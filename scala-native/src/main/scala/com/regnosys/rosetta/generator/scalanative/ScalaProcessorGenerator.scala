@@ -1,8 +1,8 @@
 package com.regnosys.rosetta.generator.scalanative
 
-object CdmProcessorGenerator {
+object ScalaProcessorGenerator {
   val generateFile: String =
-    s"""package ${AbstractCdmGenerator.basePackage}
+    s"""package ${AbstractScalaGenerator.basePackage}
       |
       |import scala.jdk.CollectionConverters._
       |

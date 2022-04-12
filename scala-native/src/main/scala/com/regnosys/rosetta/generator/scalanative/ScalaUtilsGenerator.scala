@@ -1,8 +1,8 @@
 package com.regnosys.rosetta.generator.scalanative
 
-object CdmUtilsGenerator {
+object ScalaUtilsGenerator {
   val generateFile: String =
-    s"""package ${AbstractCdmGenerator.basePackage}
+    s"""package ${AbstractScalaGenerator.basePackage}
       |
       |import scala.annotation.tailrec
       |import scala.jdk.CollectionConverters._

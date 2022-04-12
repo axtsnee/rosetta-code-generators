@@ -153,9 +153,9 @@ object GeneratorFunctions {
         if (hasMetadataReference(a) && lookupTableNameOpt.isDefined)
           s"lookupReference($name, $lookupTableName)"
         else if (isMeta)
-          s"Success($name.getValue)"
+          s"Try($name.getValue)"
         else
-          s"Success($name)"
+          s"Try($name)"
       convertRosettaTypeFromJavaTryToScalaTry(typeName, value, customConverter)
     }
   }
@@ -189,14 +189,14 @@ object GeneratorFunctions {
       case "int" | "boolean" | "string" | "time" | "dateTime" | "zonedDateTime" if isReference && lookupTableNameOpt.isDefined =>
         s"x => lookupReference(x, $lookupTableName)"
       case "int" | "boolean" | "string" | "time" | "dateTime" | "zonedDateTime" if isMeta =>
-        "x => Success(x.getValue)"
-      case "int" => "i => Success(i: Int)"
-      case "boolean" => "n => Success(n: Boolean)"
+        "x => Try(x.getValue)"
+      case "int" => "i => Try(i: Int)"
+      case "boolean" => "n => Try(n: Boolean)"
       case "string" | "time" | "dateTime" | "zonedDateTime" => "Success.apply"
       case "productType" | "eventType" | "calculation" if isReference && lookupTableNameOpt.isDefined =>
         s".map(x => lookupReference(x, $lookupTableName))"
       case "productType" | "eventType" | "calculation" if isMeta =>
-        ".map(x => Success(x.getValue))"
+        ".map(x => Try(x.getValue))"
       case "productType" | "eventType" | "calculation" => "Success.apply"
       case "date" if isReference && lookupTableNameOpt.isDefined =>
         s"d => lookupReference(d, $lookupTableName).map(_.toLocalDate)"
@@ -204,14 +204,14 @@ object GeneratorFunctions {
       case "date" => "d => Try(d.toLocalDate)"
       case "number" if isReference && lookupTableNameOpt.isDefined =>
         s"r => lookupReference(r, $lookupTableName).map(BigDecimal.apply)"
-      case "number" if isMeta => "b => Success(BigDecimal(b.getValue))"
-      case "number" => "b => Success(BigDecimal(b))"
+      case "number" if isMeta => "b => Try(BigDecimal(b.getValue))"
+      case "number" => "b => Try(BigDecimal(b))"
       case enum if enum.endsWith("Enum") && isReference && lookupTableNameOpt.isDefined =>
         s"e => lookupReference(e, $lookupTableName).map(r => new $enum.${javaTypeClassName(enum)}(r).asScala)"
       case enum if enum.endsWith("Enum") && isMeta =>
-        s"e => Success(new $enum.${javaTypeClassName(enum)}(e.getValue).asScala)"
+        s"e => Try(new $enum.${javaTypeClassName(enum)}(e.getValue).asScala)"
       case enum if enum.endsWith("Enum") =>
-        s"e => Success(new $enum.${javaTypeClassName(enum)}(e).asScala)"
+        s"e => Try(new $enum.${javaTypeClassName(enum)}(e).asScala)"
       case _ if isReference && lookupTableNameOpt.isDefined =>
         s"""a => lookupReference(a, $lookupTableName).flatMap(b => ${customConverter("b")})"""
       case _ if isMeta => s"""a => ${customConverter("a.getValue")}"""
@@ -327,7 +327,7 @@ object GeneratorFunctions {
         s"""$indent/** $defn
            |$indent  *
            |""".stripMargin
-      case _ => "/**\n"
+      case _ => s"$indent/**\n"
     }
   }
 

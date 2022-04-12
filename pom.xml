@@ -74,7 +74,6 @@
 		<module>typescript</module>
 		<module>scala</module>
 		<module>scala-native</module>
-		<module>scala-wrapper</module>
 		<module>golang</module>
 	  	<module>kotlin</module>
 		<module>c-sharp</module>

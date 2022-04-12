@@ -13,7 +13,7 @@ import org.apache.commons.io.IOUtils
 import org.eclipse.emf.common.util.URI
 import org.eclipse.xtext.testing.util.ParseHelper
 
-object TestCdmGenerator {
+object TestRosettaGenerator {
   def main(args: Array[String]): Unit = {
     require(args.nonEmpty)
     runGenerator(ScalaNativeGenerator, args.head, args.tail.headOption)

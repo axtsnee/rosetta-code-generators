@@ -7,7 +7,7 @@ import com.regnosys.rosetta.rosetta.RosettaType
 import com.regnosys.rosetta.rosetta.simple.{AnnotationRef, Attribute, Data}
 import GeneratorFunctions._
 
-case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.types) {
+case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractScalaGenerator(analysis.types) {
   private val enclosingTypes: Map[RosettaType, List[RosettaType]] =
     analysis.types.foldLeft(Map.empty[RosettaType, List[Data]]) {
       case (acc, e) if shouldBeSumType(e) =>
@@ -51,7 +51,7 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
         })
     }.withDefaultValue(Nil)
 
-  override val derivePackageName: Data => String = CdmTypeGenerator.derivePackageName
+  override val derivePackageName: Data => String = ScalaTypeGenerator.derivePackageName
 
   override val translate: Data => String = e => {
     val allSuperTypes = mixSuperTypeWithEnclosingTypes(e)
@@ -430,7 +430,7 @@ case class CdmTypeGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGe
     case safe  => safe
   }
 }
-object CdmTypeGenerator {
+object ScalaTypeGenerator {
   def derivePackageName(e: Data): String =
-    s"${AbstractCdmGenerator.deriveParentPackage(e)}.types"
+    s"${AbstractScalaGenerator.deriveParentPackage(e)}.types"
 }

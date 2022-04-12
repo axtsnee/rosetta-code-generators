@@ -7,7 +7,7 @@ import com.regnosys.rosetta.generator.util.RosettaAttributeExtensions
 import com.regnosys.rosetta.rosetta.RosettaType
 import com.regnosys.rosetta.rosetta.simple.{Attribute, Function}
 
-case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractCdmGenerator(analysis.functions) {
+case class ScalaFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractScalaGenerator(analysis.functions) {
   private val converterParmName = "convertToScala"
 
   override val dependencies: Function => Set[RosettaType] =
@@ -25,7 +25,7 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
         })
     }.withDefaultValue(Set.empty)
 
-  override val derivePackageName: Function => String = CdmFunctionGenerator.derivePackageName
+  override val derivePackageName: Function => String = ScalaFunctionGenerator.derivePackageName
 
   override val translate: Function => String = e => {
     Option(e.getOutput) match {
@@ -135,7 +135,7 @@ case class CdmFunctionGenerator(analysis: RootElementAnalyzer) extends AbstractC
     s"injector.getInstance(classOf[$javaClass]).evaluate($paramConversions)"
   }
 }
-object CdmFunctionGenerator {
+object ScalaFunctionGenerator {
   def derivePackageName(e: Function): String =
-    s"${AbstractCdmGenerator.deriveParentPackage(e)}.functions"
+    s"${AbstractScalaGenerator.deriveParentPackage(e)}.functions"
 }

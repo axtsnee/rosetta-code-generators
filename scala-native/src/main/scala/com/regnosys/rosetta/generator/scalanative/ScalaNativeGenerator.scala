@@ -8,10 +8,10 @@ import com.regnosys.rosetta.generator.java.RosettaJavaPackages
 import com.regnosys.rosetta.rosetta.{RosettaModel, RosettaRootElement}
 
 object ScalaNativeGenerator extends AbstractExternalGenerator("ScalaWrapper") {
-  val enumFilename: String = "CdmEnums.scala"
-  val functionFilename: String = "CdmFunctions.scala"
-  val metaTypeFilename: String = "CdmMetaTypes.scala"
-  val typeFilename: String = "CdmTypes.scala"
+  val enumFilename: String = "ScalaEnums.scala"
+  val functionFilename: String = "ScalaFunctions.scala"
+  val metaTypeFilename: String = "ScalaMetaTypes.scala"
+  val typeFilename: String = "ScalaTypes.scala"
   val processorFilename: String = "GlobalKeyProcessor.scala"
   val utilsFilename: String = "Utils.scala"
 
@@ -29,12 +29,12 @@ object ScalaNativeGenerator extends AbstractExternalGenerator("ScalaWrapper") {
     val rootElements = models.flatMap(_.getElements.asScala)
     val analysis = rootElements.foldLeft(RootElementAnalyzer.empty)((z, e) => z.nextElement(e))
     Map(
-      enumFilename -> CdmEnumerationGenerator(analysis).generateFile,
-      functionFilename -> CdmFunctionGenerator(analysis).generateFile,
-      metaTypeFilename -> CdmMetaTypeGenerator(analysis).generateFile,
-      typeFilename -> CdmTypeGenerator(analysis).generateFile,
-      processorFilename -> CdmProcessorGenerator.generateFile,
-      utilsFilename -> CdmUtilsGenerator.generateFile
+      enumFilename -> ScalaEnumerationGenerator(analysis).generateFile,
+      functionFilename -> ScalaFunctionGenerator(analysis).generateFile,
+      metaTypeFilename -> ScalaMetaTypeGenerator(analysis).generateFile,
+      typeFilename -> ScalaTypeGenerator(analysis).generateFile,
+      processorFilename -> ScalaProcessorGenerator.generateFile,
+      utilsFilename -> ScalaUtilsGenerator.generateFile
     ).asJava
   }
 }

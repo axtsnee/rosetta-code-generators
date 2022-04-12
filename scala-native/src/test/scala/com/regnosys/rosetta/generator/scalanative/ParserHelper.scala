@@ -11,7 +11,7 @@ object ParserHelper {
   private lazy val testHelper = new TestHelper(ScalaNativeGenerator)
   private implicit val autodelete: Using.Releasable[Path] = p => Files.delete(p)
 
-  val preamble =
+  val preamble: String =
     """namespace test:
       |version "test"
       |

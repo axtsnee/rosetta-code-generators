@@ -10,31 +10,29 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   "The ScalaNativeGenerator" should "handle simple enums" in {
     val actual = ParserHelper.parse(cdmTestEnum).get(ScalaNativeGenerator.enumFilename)
     val expected =
-      """package org.isda.scala.test.enums {
+      """package org.isda.cdm.scalanative.test.enums {
+        |  /** Test enum description. */
+        |  sealed trait TestEnum
+        |  object TestEnum {
+        |    /** Test enum value 1 */
+        |    case object TestEnumValue1 extends TestEnum
+        |    /** Test enum value 2 */
+        |    case object TestEnumValue2 extends TestEnum
         |
-        |/** Test enum description. */
-        |sealed trait TestEnum
-        |object TestEnum {
-        |  /** Test enum value 1 */
-        |  case object TestEnumValue1 extends TestEnum
-        |  /** Test enum value 2 */
-        |  case object TestEnumValue2 extends TestEnum
+        |    implicit class ConvertTestEnumToJava(x: TestEnum) {
+        |      def asJava: test.TestEnum = x match {
+        |        case TestEnumValue1 => test.TestEnum.TEST_ENUM_VALUE_1
+        |        case TestEnumValue2 => test.TestEnum.TEST_ENUM_VALUE_2
+        |      }
+        |    }
         |
-        |  implicit class JavaConverter(x: TestEnum) {
-        |    def asJava: test.TestEnum = x match {
-        |      case TestEnumValue1 => test.TestEnum.TEST_ENUM_VALUE_1
-        |      case TestEnumValue2 => test.TestEnum.TEST_ENUM_VALUE_2
+        |    implicit class ConvertTestEnumToScala(x: test.TestEnum) {
+        |      def asScala: TestEnum = x match {
+        |        case test.TestEnum.TEST_ENUM_VALUE_1 => TestEnumValue1
+        |        case test.TestEnum.TEST_ENUM_VALUE_2 => TestEnumValue2
+        |      }
         |    }
         |  }
-        |
-        |  implicit class ScalaConverter(x: test.TestEnum) {
-        |    def asScala: TestEnum = x match {
-        |      case test.TestEnum.TEST_ENUM_VALUE_1 => TestEnumValue1
-        |      case test.TestEnum.TEST_ENUM_VALUE_2 => TestEnumValue2
-        |    }
-        |  }
-        |}
-        |
         |}
         |""".stripMargin
     actual.value.toString should endWith(expected)
@@ -49,19 +47,19 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   it should "handle one-of enums part 2" in {
     val actual = ParserHelper.parse(cdmTestOneOfType + cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""/** Test type description. */
-         |trait TestType extends TestSumType {
-         |  /** Test string */
-         |  def testTypeValue1: String
-         |  /** Test optional string */
-         |  def testTypeValue2: Option[String]
-         |  /** Test string list */
-         |  def testTypeValue3: List[String]
-         |  /** Test TestType2 */
-         |  def testTypeValue4: TestType2
-         |  /** Optional test enum */
-         |  def testEnum: Option[TestEnum]
-         |}
+      s"""  /** Test type description. */
+         |  trait TestType extends TestSumType {
+         |    /** Test string */
+         |    def testTypeValue1: String
+         |    /** Test optional string */
+         |    def testTypeValue2: Option[String]
+         |    /** Test string list */
+         |    def testTypeValue3: List[String]
+         |    /** Test TestType2 */
+         |    def testTypeValue4: TestType2
+         |    /** Optional test enum */
+         |    def testEnum: Option[TestEnum]
+         |  }
          |""".stripMargin
     actual.value.toString should include(expected)
   }
@@ -69,14 +67,14 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   it should "handle one-of enums part 3" in {
     val actual = ParserHelper.parse(cdmTestOneOfType + cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""trait TestType2 extends TestSumType {
-         |  /** Test number list */
-         |  def testType2Value1: List[BigDecimal]
-         |  /** Test date */
-         |  def testType2Value2: Option[LocalDate]
-         |  /** Test enum */
-         |  def testEnum: TestEnum
-         |}
+      s"""  trait TestType2 extends TestSumType {
+         |    /** Test number list */
+         |    def testType2Value1: List[BigDecimal]
+         |    /** Test date */
+         |    def testType2Value2: Option[LocalDate]
+         |    /** Test enum */
+         |    def testEnum: TestEnum
+         |  }
          |""".stripMargin
     actual.value.toString should include(expected)
   }
@@ -84,19 +82,19 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   it should "handle simple types part 1" in {
     val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""/** Test type description. */
-         |trait TestType {
-         |  /** Test string */
-         |  def testTypeValue1: String
-         |  /** Test optional string */
-         |  def testTypeValue2: Option[String]
-         |  /** Test string list */
-         |  def testTypeValue3: List[String]
-         |  /** Test TestType2 */
-         |  def testTypeValue4: TestType2
-         |  /** Optional test enum */
-         |  def testEnum: Option[TestEnum]
-         |}
+      s"""  /** Test type description. */
+         |  trait TestType {
+         |    /** Test string */
+         |    def testTypeValue1: String
+         |    /** Test optional string */
+         |    def testTypeValue2: Option[String]
+         |    /** Test string list */
+         |    def testTypeValue3: List[String]
+         |    /** Test TestType2 */
+         |    def testTypeValue4: TestType2
+         |    /** Optional test enum */
+         |    def testEnum: Option[TestEnum]
+         |  }
          |""".stripMargin
     actual.value.toString should include(expected)
   }
@@ -104,28 +102,30 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   it should "handle simple types part 2" in {
     val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""/** Test type description.
-         |  *
-         |  * @param testTypeValue1 Test string
-         |  * @param testTypeValue2 Test optional string
-         |  * @param testTypeValue3 Test string list
-         |  * @param testTypeValue4 Test TestType2
-         |  * @param testEnum Optional test enum
-         |  */
-         |final case class DefaultTestType(
-         |  testTypeValue1: String,
-         |  testTypeValue2: Option[String],
-         |  testTypeValue3: List[String],
-         |  testTypeValue4: TestType2,
-         |  testEnum: Option[TestEnum]
-         |)(implicit validator: RosettaTypeValidator) extends TestType {
-         |  private[types] val toJava: test.TestType = {
-         |    val unvalidated = TestType.buildJava(this)
-         |    val validation = validator.runProcessStep(unvalidated.getClass, unvalidated.toBuilder)
-         |    if (validation.success) unvalidated
-         |    else throw new IllegalStateException(validation.validationFailures.asScala.mkString("; "))
+      s"""  /** Test type description.
+         |    *
+         |    * @param testTypeValue1 Test string
+         |    * @param testTypeValue2 Test optional string
+         |    * @param testTypeValue3 Test string list
+         |    * @param testTypeValue4 Test TestType2
+         |    * @param testEnum Optional test enum
+         |    */
+         |  final case class DefaultTestType(
+         |    testTypeValue1: String,
+         |    testTypeValue2: Option[String],
+         |    testTypeValue3: List[String],
+         |    testTypeValue4: TestType2,
+         |    testEnum: Option[TestEnum]
+         |  )(
+         |    implicit validator: RosettaTypeValidator
+         |  ) extends TestType {
+         |    private val validation =
+         |      validator.runProcessStep(classOf[test.TestType], TestType.ConvertTestTypeToJava(this).asJava)
+         |    if (!validation.success)
+         |      throw new IllegalStateException(
+         |        validation.validationFailures.asScala.mkString("; ")
+         |      )
          |  }
-         |}
          |""".stripMargin
     actual.value.toString should include(expected)
   }
@@ -133,14 +133,14 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   it should "handle simple types part 3" in {
     val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""trait TestType2 {
-         |  /** Test number list */
-         |  def testType2Value1: List[BigDecimal]
-         |  /** Test date */
-         |  def testType2Value2: Option[LocalDate]
-         |  /** Test enum */
-         |  def testEnum: TestEnum
-         |}
+      s"""  trait TestType2 {
+         |    /** Test number list */
+         |    def testType2Value1: List[BigDecimal]
+         |    /** Test date */
+         |    def testType2Value2: Option[LocalDate]
+         |    /** Test enum */
+         |    def testEnum: TestEnum
+         |  }
          |""".stripMargin
     actual.value.toString should include(expected)
   }
@@ -148,28 +148,30 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   it should "handle simple types part 4" in {
     val actual = ParserHelper.parse(cdmTestEnum + cdmTestType + cdmTestType2).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""/**
-         |  * @param testType2Value1 Test number list
-         |  * @param testType2Value2 Test date
-         |  * @param testEnum Test enum
-         |  */
-         |final case class DefaultTestType2(
-         |  testType2Value1: List[BigDecimal],
-         |  testType2Value2: Option[LocalDate],
-         |  testEnum: TestEnum
-         |)(implicit validator: RosettaTypeValidator) extends TestType2""".stripMargin
+      s"""  /**
+         |    * @param testType2Value1 Test number list
+         |    * @param testType2Value2 Test date
+         |    * @param testEnum Test enum
+         |    */
+         |  final case class DefaultTestType2(
+         |    testType2Value1: List[BigDecimal],
+         |    testType2Value2: Option[LocalDate],
+         |    testEnum: TestEnum
+         |  )(
+         |    implicit validator: RosettaTypeValidator
+         |  ) extends TestType2""".stripMargin
     actual.value.toString should include(expected)
   }
 
   it should "handle hierarchical types part 1" in {
     val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""trait TestType2 extends TestType3 {
-         |  /** Test number */
-         |  def testType2Value1: Option[BigDecimal]
-         |  /** Test date */
-         |  def testType2Value2: List[LocalDate]
-         |}
+      s"""  trait TestType2 extends TestType3 {
+         |    /** Test number */
+         |    def testType2Value1: Option[BigDecimal]
+         |    /** Test date */
+         |    def testType2Value2: List[LocalDate]
+         |  }
          |""".stripMargin
     actual.value.toString should include(expected)
   }
@@ -177,12 +179,12 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   it should "handle hierarchical types part 2" in {
     val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""trait TestType3 {
-         |  /** Test string */
-         |  def testType3Value1: Option[String]
-         |  /** Test int */
-         |  def testType3Value2: List[Int]
-         |}
+      s"""  trait TestType3 {
+         |    /** Test string */
+         |    def testType3Value1: Option[String]
+         |    /** Test int */
+         |    def testType3Value2: List[Int]
+         |  }
          |""".stripMargin
     actual.value.toString should include(expected)
   }
@@ -190,36 +192,42 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
   it should "handle hierarchical types part 3" in {
     val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""final case class DefaultTestType(
-         |  testType3Value1: Option[String],
-         |  testType3Value2: List[Int],
-         |  testType2Value1: Option[BigDecimal],
-         |  testType2Value2: List[LocalDate],
-         |  testType1Value1: String,
-         |  testType1Value2: Option[Int]
-         |)(implicit validator: RosettaTypeValidator) extends TestType""".stripMargin
+      s"""  final case class DefaultTestType(
+         |    testType3Value1: Option[String],
+         |    testType3Value2: List[Int],
+         |    testType2Value1: Option[BigDecimal],
+         |    testType2Value2: List[LocalDate],
+         |    testType1Value1: String,
+         |    testType1Value2: Option[Int]
+         |  )(
+         |    implicit validator: RosettaTypeValidator
+         |  ) extends TestType""".stripMargin
     actual.value.toString should include(expected)
   }
 
   it should "handle hierarchical types part 4" in {
     val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""final case class DefaultTestType2(
-         |  testType3Value1: Option[String],
-         |  testType3Value2: List[Int],
-         |  testType2Value1: Option[BigDecimal],
-         |  testType2Value2: List[LocalDate]
-         |)(implicit validator: RosettaTypeValidator) extends TestType2""".stripMargin
+      s"""  final case class DefaultTestType2(
+         |    testType3Value1: Option[String],
+         |    testType3Value2: List[Int],
+         |    testType2Value1: Option[BigDecimal],
+         |    testType2Value2: List[LocalDate]
+         |  )(
+         |    implicit validator: RosettaTypeValidator
+         |  ) extends TestType2""".stripMargin
     actual.value.toString should include(expected)
   }
 
   it should "handle hierarchical types part 5" in {
     val actual = ParserHelper.parse(cdmTestHierarchy).get(ScalaNativeGenerator.typeFilename)
     val expected =
-      s"""final case class DefaultTestType3(
-         |  testType3Value1: Option[String],
-         |  testType3Value2: List[Int]
-         |)(implicit validator: RosettaTypeValidator) extends TestType3""".stripMargin
+      s"""  final case class DefaultTestType3(
+         |    testType3Value1: Option[String],
+         |    testType3Value2: List[Int]
+         |  )(
+         |    implicit validator: RosettaTypeValidator
+         |  ) extends TestType3""".stripMargin
     actual.value.toString should include(expected)
   }
 }
