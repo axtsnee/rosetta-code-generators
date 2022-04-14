@@ -12,7 +12,6 @@ object ScalaNativeGenerator extends AbstractExternalGenerator("ScalaWrapper") {
   val functionFilename: String = "ScalaFunctions.scala"
   val metaTypeFilename: String = "ScalaMetaTypes.scala"
   val typeFilename: String = "ScalaTypes.scala"
-  val processorFilename: String = "GlobalKeyProcessor.scala"
   val utilsFilename: String = "Utils.scala"
 
   override def generate(
@@ -33,7 +32,6 @@ object ScalaNativeGenerator extends AbstractExternalGenerator("ScalaWrapper") {
       functionFilename -> ScalaFunctionGenerator(analysis).generateFile,
       metaTypeFilename -> ScalaMetaTypeGenerator(analysis).generateFile,
       typeFilename -> ScalaTypeGenerator(analysis).generateFile,
-      processorFilename -> ScalaProcessorGenerator.generateFile,
       utilsFilename -> ScalaUtilsGenerator.generateFile
     ).asJava
   }

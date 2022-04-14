@@ -61,29 +61,6 @@ object ScalaUtilsGenerator {
       |      case None    => Success(None)
       |      case Some(a) => f(a).map(Some.apply)
       |    }
-      |
-      |  def lookupReference[T : ClassTag](
-      |      r: ReferenceWithMeta[T],
-      |      lookupTable: Map[String, List[_]]
-      |  ): Try[T] =
-      |    Option(r.getValue).orElse {
-      |      for {
-      |        k <- Option(r.getGlobalReference).orElse(
-      |            Option(r.getReference).map(_.getReference)
-      |          )
-      |        vs <- lookupTable.get(k)
-      |        v <- vs.flatMap {
-      |            case referent: T => Some(referent)
-      |            case _ => None
-      |          }
-      |          .headOption
-      |      } yield v
-      |    } match {
-      |      case Some(t) => Success(t)
-      |      case None =>
-      |        val typ = implicitly[ClassTag[T]].runtimeClass
-      |        Failure(new Exception(s"Could not find the $$typ referent of $$r."))
-      |    }
       |}
       |""".stripMargin
 }

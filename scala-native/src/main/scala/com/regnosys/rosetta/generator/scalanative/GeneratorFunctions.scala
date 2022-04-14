@@ -126,33 +126,26 @@ object GeneratorFunctions {
 
   def convertRosettaAttributeFromJavaToScalaTry(
       a: Attribute,
-      lookupTableNameOpt: Option[String] = None,
       nameOpt: Option[String] = None,
       customConverterOpt: Option[String => String] = None
   ): String = {
     val name = nameOpt.getOrElse(a.getName)
     val typeName = a.getType.getName
-    val lookupTableName = lookupTableNameOpt match {
-      case Some(n) => s"($n)"
-      case None => ""
-    }
     val isMeta = hasMetadataAnnotation(a)
     val customConverter = customConverterOpt.getOrElse { (x: String) =>
-      s"new $typeName.${javaTypeClassName(typeName)}($x).asScala$lookupTableName"
+      s"new $typeName.${javaTypeClassName(typeName)}($x).asScala"
     }
     if (isSingleOptional(a)) {
       val mapping =
-        mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta, lookupTableNameOpt)
+        mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta)
       s"traverseTry(Option($name))($mapping)"
     } else if (isMultiple(a)) {
       val mapping =
-        mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta, lookupTableNameOpt)
+        mapRosettaAttributeFromJavaToScalaTry(a, customConverter, isMeta)
       s"traverseTry(Option($name.asScala).getOrElse(Nil).toList)($mapping)"
     } else {
       val value =
-        if (hasMetadataReference(a) && lookupTableNameOpt.isDefined)
-          s"lookupReference($name, $lookupTableName)"
-        else if (isMeta)
+        if (isMeta)
           s"Try($name.getValue)"
         else
           s"Try($name)"
@@ -180,40 +173,25 @@ object GeneratorFunctions {
   private def mapRosettaAttributeFromJavaToScalaTry(
       a: Attribute,
       customConverter: String => String,
-      isMeta: Boolean,
-      lookupTableNameOpt: Option[String] = None
-  ): String = {
-    val lookupTableName = lookupTableNameOpt.getOrElse("")
-    val isReference = hasMetadataReference(a)
+      isMeta: Boolean
+  ) = {
     a.getType.getName match {
-      case "int" | "boolean" | "string" | "time" | "dateTime" | "zonedDateTime" if isReference && lookupTableNameOpt.isDefined =>
-        s"x => lookupReference(x, $lookupTableName)"
       case "int" | "boolean" | "string" | "time" | "dateTime" | "zonedDateTime" if isMeta =>
         "x => Try(x.getValue)"
       case "int" => "i => Try(i: Int)"
       case "boolean" => "n => Try(n: Boolean)"
       case "string" | "time" | "dateTime" | "zonedDateTime" => "Success.apply"
-      case "productType" | "eventType" | "calculation" if isReference && lookupTableNameOpt.isDefined =>
-        s".map(x => lookupReference(x, $lookupTableName))"
       case "productType" | "eventType" | "calculation" if isMeta =>
         ".map(x => Try(x.getValue))"
       case "productType" | "eventType" | "calculation" => "Success.apply"
-      case "date" if isReference && lookupTableNameOpt.isDefined =>
-        s"d => lookupReference(d, $lookupTableName).map(_.toLocalDate)"
       case "date" if isMeta => "d => Try(d.getValue.toLocalDate)"
       case "date" => "d => Try(d.toLocalDate)"
-      case "number" if isReference && lookupTableNameOpt.isDefined =>
-        s"r => lookupReference(r, $lookupTableName).map(BigDecimal.apply)"
       case "number" if isMeta => "b => Try(BigDecimal(b.getValue))"
       case "number" => "b => Try(BigDecimal(b))"
-      case enum if enum.endsWith("Enum") && isReference && lookupTableNameOpt.isDefined =>
-        s"e => lookupReference(e, $lookupTableName).map(r => new $enum.${javaTypeClassName(enum)}(r).asScala)"
       case enum if enum.endsWith("Enum") && isMeta =>
         s"e => Try(new $enum.${javaTypeClassName(enum)}(e.getValue).asScala)"
       case enum if enum.endsWith("Enum") =>
         s"e => Try(new $enum.${javaTypeClassName(enum)}(e).asScala)"
-      case _ if isReference && lookupTableNameOpt.isDefined =>
-        s"""a => lookupReference(a, $lookupTableName).flatMap(b => ${customConverter("b")})"""
       case _ if isMeta => s"""a => ${customConverter("a.getValue")}"""
       case _ => s"a => ${customConverter("a")}"
     }

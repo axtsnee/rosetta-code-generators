@@ -1,7 +1,7 @@
 package com.regnosys.rosetta.generator.scalanative
 
 import AbstractScalaGenerator.deriveAnyPackageName
-import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaModel, RosettaNamed, RosettaRootElement}
+import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaNamed, RosettaRootElement}
 import com.regnosys.rosetta.rosetta.simple.{Data, Function}
 
 abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed](
@@ -60,8 +60,10 @@ abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed]
        |import scala.util.{Try, Success, Failure}
        |
        |import com.google.inject.Injector
+       |import com.regnosys.rosetta.common.hashing.ReferenceResolverProcessStep
        |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
        |import com.regnosys.rosetta.common.validation.ValidationReport
+       |import org.isda.cdm.processor.CdmReferenceConfig
        |import ${AbstractScalaGenerator.basePackage}._
        |import ${AbstractScalaGenerator.basePackage}.Utils._
        |

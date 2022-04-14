@@ -113,7 +113,6 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
     val traitComment = generateOptionalComment(e, "  ")
     val extending = generateExtendsClauseFromTypes(superTypes)
     val sealedTrait = s"$traitComment  sealed trait $scalaTypeName$extending"
-    val lookupTableName = "lookupTable"
     // subTypes must be sorted from deepest descendant to shallowest to
     // prevent a supertype's case statement from hiding the subtype's.
     val subTypes = subtypesByType(e).toList.sortBy(t => getAllAncestors(t).length).reverse
@@ -128,7 +127,7 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
       val fromJavaStmts = subTypes.map { t =>
         val name = t.getName
         s"""          case ja: ${rosettaTypeToJavaType(t)} =>
-           |            new $name.${javaTypeClassName(name)}(ja).asScala($lookupTableName)""".stripMargin
+           |            new $name.${javaTypeClassName(name)}(ja).asScala""".stripMargin
       }.mkString("\n")
       s"""$sealedTrait
          |  object $scalaTypeName {
@@ -140,11 +139,17 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
          |    }
          |
          |    implicit class ${javaTypeClassName(rosettaName)}(t: $javaTypeName) {
-         |${generateLookupMethod(rosettaName, javaTypeName, "t")}
+         |      def asScalaResolvingReferences(
+         |        implicit validator: RosettaTypeValidator
+         |      ): Try[$scalaTypeName] = {
+         |        val builder = t.toBuilder
+         |        new ReferenceResolverProcessStep(CdmReferenceConfig.get()).runProcessStep(classOf[$javaTypeName], builder)
+         |        builder.build match {
+         |$fromJavaStmts
+         |        }
+         |      }
          |
          |      def asScala(
-         |        $lookupTableName: Map[String, List[_]]
-         |      )(
          |        implicit validator: RosettaTypeValidator
          |      ): Try[$scalaTypeName] =
          |        t match {
@@ -157,19 +162,6 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
          |""".stripMargin
     }
   }
-
-  private def generateLookupMethod(
-      scalaTypeName: String,
-      javaTypeName: String,
-      javaObjectName: String
-  ): String =
-    s"""      def asScala(implicit validator: RosettaTypeValidator): Try[$scalaTypeName] = {
-       |        val globalKeyProcessor = new GlobalKeyProcessor()
-       |        globalKeyProcessor.runProcessStep(classOf[$javaTypeName], $javaObjectName)
-       |        globalKeyProcessor.report match {
-       |          case globalKeys: ProcessorReport => asScala(globalKeys.lookupTable)
-       |        }
-       |      }""".stripMargin
 
   private def generateSealedTrait(e: Data, superTypes: Iterable[RosettaType]): String = {
     val rosettaName = e.getName
@@ -189,7 +181,6 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
     val attrs = e.getAttributes.asScala
     val javaObjectName = "ja"
     val scalaObjectName = "sc"
-    val lookupTableName = "lookupTable"
     val pattern =
       attrs
         .map(a => s"$javaObjectName.get${toUpperFirst(a.getName)}")
@@ -203,17 +194,26 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
        |      }
        |    }
        |
-       |    implicit class ${javaTypeClassName(rosettaName)}($javaObjectName: $javaTypeName) {
-       |${generateLookupMethod(rosettaName, javaTypeName, javaObjectName)}
+       |    implicit class ${javaTypeClassName(rosettaName)}(javaObject: $javaTypeName) {
+       |      def asScalaResolvingReferences(
+       |        implicit validator: RosettaTypeValidator
+       |      ): Try[$scalaTypeName] = {
+       |        val builder = javaObject.toBuilder
+       |        new ReferenceResolverProcessStep(CdmReferenceConfig.get()).runProcessStep(classOf[$javaTypeName], builder)
+       |        val $javaObjectName = builder.build
+       |        $pattern match { // make sure subtype cases come before supertype to avoid unreachable code
+       |${generateConversionCaseStatements(attrs.sorted(descendantsBeforeAncestors)).mkString}
+       |        }
+       |      }
        |
        |      def asScala(
-       |        $lookupTableName: Map[String, List[_]]
-       |      )(
        |        implicit validator: RosettaTypeValidator
-       |      ): Try[$scalaTypeName] =
+       |      ): Try[$scalaTypeName] = {
+       |        val $javaObjectName = javaObject
        |        $pattern match { // make sure subtype cases come before supertype to avoid unreachable code
-       |${generateConversionCaseStatements(attrs.sorted(descendantsBeforeAncestors), lookupTableName).mkString}
+       |${generateConversionCaseStatements(attrs.sorted(descendantsBeforeAncestors)).mkString}
        |        }
+       |      }
        |    }
        |
        |${generateImplicitConverter(rosettaName, javaTypeName, scalaTypeName)}
@@ -222,13 +222,12 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
   }
 
   private def generateConversionCaseStatements(
-      attrs: Iterable[Attribute],
-      lookupTableName: String
+      attrs: Iterable[Attribute]
   ): Iterable[String] =
     attrs.map { a =>
       val typeName = a.getType.getName
       val converter: String => String =
-        x => s"new $typeName.${javaTypeClassName(typeName)}($x).asScala($lookupTableName)"
+        x => s"new $typeName.${javaTypeClassName(typeName)}($x).asScala"
       val matched = "x"
       val conversion = convertRosettaTypeFromJavaTryToScalaTry(typeName, s"Success($matched)", converter)
       s"""          case Some($matched: ${rosettaTypeToJavaType(a.getType)}) =>
@@ -273,10 +272,9 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
     val allAttrs = getInheritedAttributes(e) ++ attrs
     val scalaObjectName = "sc"
     val javaObjectName = "ja"
-    val lookupTableName = "lookupTable"
     val forComprehensionTerms =
       allAttrs
-        .map(a => generateForComprehensionTerm(a, javaObjectName, lookupTableName))
+        .map(a => generateForComprehensionTerm(a, javaObjectName))
         .mkString("\n")
     val escapedAttributeNames =
       allAttrs.map(n => escapeReservedWords(n.getName)).mkString(", ")
@@ -290,17 +288,26 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
         |      }
         |    }
         |
-        |    implicit class ${javaTypeClassName(rosettaName)}($javaObjectName: $javaTypeName) {
-        |${generateLookupMethod(rosettaName, javaTypeName, javaObjectName)}
-        |
-        |      def asScala(
-        |        $lookupTableName: Map[String, List[_]]
-        |      )(
+        |    implicit class ${javaTypeClassName(rosettaName)}(javaObject: $javaTypeName) {
+        |      def asScalaResolvingReferences(
         |        implicit validator: RosettaTypeValidator
-        |      ): Try[$scalaTypeName] =
+        |      ): Try[$scalaTypeName] = {
+        |        val builder = javaObject.toBuilder
+        |        new ReferenceResolverProcessStep(CdmReferenceConfig.get()).runProcessStep(classOf[$javaTypeName], builder)
+        |        val $javaObjectName = builder.build
         |        for {
         |$forComprehensionTerms
         |        } yield Default$scalaTypeName($escapedAttributeNames)
+        |      }
+        |
+        |      def asScala(
+        |        implicit validator: RosettaTypeValidator
+        |      ): Try[$scalaTypeName] = {
+        |        val $javaObjectName = javaObject
+        |        for {
+        |$forComprehensionTerms
+        |        } yield Default$scalaTypeName($escapedAttributeNames)
+        |      }
         |    }
         |
         |${generateImplicitConverter(rosettaName, javaTypeName, scalaTypeName)}
@@ -378,16 +385,14 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
 
   private def generateForComprehensionTerm(
       a: Attribute,
-      ref: String,
-      lookupTableName: String
+      ref: String
   ): String = {
     val name = a.getName
     val accessor = s"$ref.get${toUpperFirst(name)}"
     val conversion =
       convertRosettaAttributeFromJavaToScalaTry(
         a,
-        nameOpt = Some(accessor),
-        lookupTableNameOpt = Some(lookupTableName)
+        nameOpt = Some(accessor)
       )
     s"          ${escapeReservedWords(name)} <- $conversion"
   }
