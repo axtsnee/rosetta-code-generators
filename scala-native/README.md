@@ -128,8 +128,25 @@ object TestFunc {
       implicit injector: com.google.inject.Injector,
       validate: cdm.base.TestType => ValidationReport,
       convertToScala: cdm.base.TestType => Try[org.isda.cdm.scalanative.base.TestType]
-  ): Try[BigDecimal] =
-    Try(injector.getInstance(classOf[TestFunc]).evaluate(n.bigDecimal)).map(BigDecimal.apply)
+  ): Try[TestType] = {
+    for {
+      result <- Try(
+        injector
+          .getInstance(classOf[TestFunc])
+          .evaluate(n.bigDecimal)
+      )
+      validation = validate(result)
+      returnValue <-
+        if (validation.success)
+          Try(result).flatMap(v => convertToScala(v))
+        else
+          Failure(
+            new IllegalStateException(
+              validation.validationFailures.asScala.mkString("; ")
+            )
+          )
+    } yield returnValue
+  }
 }
 ```
 NB: functions that return simple types do not require the implicit
