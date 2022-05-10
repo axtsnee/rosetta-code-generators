@@ -1,7 +1,7 @@
 package com.regnosys.rosetta.generator.scalanative
 
 import AbstractScalaGenerator.deriveAnyPackageName
-import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaNamed, RosettaRootElement}
+import com.regnosys.rosetta.rosetta.{RosettaEnumeration, RosettaMetaType, RosettaNamed, RosettaRootElement, RosettaType}
 import com.regnosys.rosetta.rosetta.simple.{Data, Function}
 
 abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed](
@@ -20,7 +20,12 @@ abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed]
         .mkString("\n")
     elements
       .headOption
-      .map(e => generateFileHeader(e.getModel.getVersion) + generatedCode)
+      .map {
+        case e: RosettaEnumeration => generateFileHeader(e.getModel.getVersion) + generatedCode
+        case e: Function           => generateFunctionFileHeader(e.getModel.getVersion) + generatedCode
+        case e: RosettaMetaType    => generateFileHeader(e.getModel.getVersion) + generatedCode
+        case e: RosettaType        => generateTypeFileHeader(e.getModel.getVersion) + generatedCode
+      }
       .getOrElse("")
   }
 
@@ -48,27 +53,41 @@ abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed]
     }
   }
 
-  private def generateFileHeader(version: String): String = {
+  private def generateFileHeader(version: String): String =
     s"""/**
        |  * This file is auto-generated from the ISDA Common Domain Model, do not edit.
        |  * Version: $version
        |  */
-       |import java.time._
+       |""".stripMargin
+
+  private def generateFunctionFileHeader(version: String): String =
+    generateFileHeader(version) +
+    s"""import java.time._
        |
        |import scala.jdk.CollectionConverters._
        |import scala.math.BigDecimal
        |import scala.util.{Try, Success, Failure}
        |
        |import com.google.inject.Injector
-       |import com.regnosys.rosetta.common.hashing.ReferenceResolverProcessStep
-       |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
        |import com.regnosys.rosetta.common.validation.ValidationReport
-       |import org.isda.cdm.processor.CdmReferenceConfig
-       |import ${AbstractScalaGenerator.basePackage}._
        |import ${AbstractScalaGenerator.basePackage}.Utils._
        |
        |""".stripMargin
-  }
+
+  private def generateTypeFileHeader(version: String): String =
+    generateFileHeader(version) +
+    s"""import java.time._
+       |
+       |import scala.jdk.CollectionConverters._
+       |import scala.math.BigDecimal
+       |import scala.util.{Try, Success, Failure}
+       |
+       |import com.regnosys.rosetta.common.hashing.ReferenceResolverProcessStep
+       |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
+       |import org.isda.cdm.processor.CdmReferenceConfig
+       |import ${AbstractScalaGenerator.basePackage}.Utils._
+       |
+       |""".stripMargin
 }
 object AbstractScalaGenerator {
   val basePackage = "org.isda.cdm.scalanative"

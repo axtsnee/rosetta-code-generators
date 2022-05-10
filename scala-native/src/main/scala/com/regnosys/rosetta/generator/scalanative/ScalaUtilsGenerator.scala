@@ -6,14 +6,12 @@ object ScalaUtilsGenerator {
       |
       |import scala.annotation.tailrec
       |import scala.jdk.CollectionConverters._
-      |import scala.reflect.ClassTag
       |import scala.util.{Try, Success, Failure}
       |
       |import com.google.inject.{Guice, Injector}
       |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
       |import com.regnosys.rosetta.common.validation.ValidationReport
       |import com.rosetta.model.lib.RosettaModelObject
-      |import com.rosetta.model.lib.meta.ReferenceWithMeta
       |import org.isda.cdm.CdmRuntimeModule
       |
       |object implicits {

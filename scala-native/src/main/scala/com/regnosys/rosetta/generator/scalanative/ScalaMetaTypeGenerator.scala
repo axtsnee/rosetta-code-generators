@@ -14,7 +14,7 @@ case class ScalaMetaTypeGenerator(analysis: RootElementAnalyzer)
 
   override val translate: RosettaMetaType => String = e => {
     s"""  class Unimplemented_${e.getName} {
-       |    val value: ${rosettaTypeToScalaType(e.getType)} = ???
+       |    def value: ${rosettaTypeToScalaType(e.getType)} = ???
        |  }
        |""".stripMargin
   }

@@ -112,55 +112,7 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
     val scalaTypeName = rosettaName
     val traitComment = generateOptionalComment(e, "  ")
     val extending = generateExtendsClauseFromTypes(superTypes)
-    val sealedTrait = s"$traitComment  sealed trait $scalaTypeName$extending"
-    // subTypes must be sorted from deepest descendant to shallowest to
-    // prevent a supertype's case statement from hiding the subtype's.
-    val subTypes = subtypesByType(e).toList.sortBy(t => getAllAncestors(t).length).reverse
-    if (subTypes.isEmpty) {
-      sealedTrait + "\n"
-    } else {
-      val javaTypeName = rosettaTypeToJavaType(e)
-      val toJavaStmts = subTypes.map { t =>
-        val name = t.getName
-        s"          case sc: $name => new $name.${scalaTypeClassName(name)}(sc).asJava"
-      }.mkString("\n")
-      val fromJavaStmts = subTypes.map { t =>
-        val name = t.getName
-        s"""          case ja: ${rosettaTypeToJavaType(t)} =>
-           |            new $name.${javaTypeClassName(name)}(ja).asScala""".stripMargin
-      }.mkString("\n")
-      s"""$sealedTrait
-         |  object $scalaTypeName {
-         |    implicit class ${scalaTypeClassName(rosettaName)}(t: $scalaTypeName) {
-         |      def asJava: $javaTypeName =
-         |        t match {
-         |$toJavaStmts
-         |        }
-         |    }
-         |
-         |    implicit class ${javaTypeClassName(rosettaName)}(t: $javaTypeName) {
-         |      def asScalaResolvingReferences(
-         |        implicit validator: RosettaTypeValidator
-         |      ): Try[$scalaTypeName] = {
-         |        val builder = t.toBuilder
-         |        new ReferenceResolverProcessStep(CdmReferenceConfig.get()).runProcessStep(classOf[$javaTypeName], builder)
-         |        builder.build match {
-         |$fromJavaStmts
-         |        }
-         |      }
-         |
-         |      def asScala(
-         |        implicit validator: RosettaTypeValidator
-         |      ): Try[$scalaTypeName] =
-         |        t match {
-         |$fromJavaStmts
-         |        }
-         |    }
-         |
-         |${generateImplicitConverter(rosettaName, javaTypeName, scalaTypeName)}
-         |  }
-         |""".stripMargin
-    }
+    s"$traitComment  sealed trait $scalaTypeName$extending\n"
   }
 
   private def generateSealedTrait(e: Data, superTypes: Iterable[RosettaType]): String = {
@@ -185,6 +137,8 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
       attrs
         .map(a => s"$javaObjectName.get${toUpperFirst(a.getName)}")
         .mkString("(Option(", ")).orElse(Option(", "))")
+    val conversionCaseStatements =
+      generateConversionCaseStatements(attrs.sorted(descendantsBeforeAncestors)).mkString
     s"""$traitComment  sealed trait $scalaTypeName$extending
        |  object $scalaTypeName {
        |    implicit class ${scalaTypeClassName(rosettaName)}($scalaObjectName: $scalaTypeName) {
@@ -202,7 +156,8 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
        |        new ReferenceResolverProcessStep(CdmReferenceConfig.get()).runProcessStep(classOf[$javaTypeName], builder)
        |        val $javaObjectName = builder.build
        |        $pattern match { // make sure subtype cases come before supertype to avoid unreachable code
-       |${generateConversionCaseStatements(attrs.sorted(descendantsBeforeAncestors)).mkString}
+       |$conversionCaseStatements
+       |          case impossible => Failure(new IllegalStateException(s"Found impossible case '$$impossible'."))
        |        }
        |      }
        |
@@ -211,7 +166,8 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
        |      ): Try[$scalaTypeName] = {
        |        val $javaObjectName = javaObject
        |        $pattern match { // make sure subtype cases come before supertype to avoid unreachable code
-       |${generateConversionCaseStatements(attrs.sorted(descendantsBeforeAncestors)).mkString}
+       |$conversionCaseStatements
+       |          case impossible => Failure(new IllegalStateException(s"Found impossible case '$$impossible'."))
        |        }
        |      }
        |    }
@@ -321,8 +277,7 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
        |    ): $javaTypeName => Try[$scalaTypeName] =
        |      x => {
        |        new ${javaTypeClassName(rosettaName)}(x).asScala
-       |      }
-       |""".stripMargin
+       |      }""".stripMargin
 
   private def getAllAnnotationRefs(e: Data): Iterable[AnnotationRef] = {
     Option(e.getSuperType) match {
