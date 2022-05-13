@@ -20,17 +20,6 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
       case (acc, _) => acc
     }.withDefaultValue(Nil)
 
-  private val subtypesByType: Map[Data, Set[Data]] =
-    analysis.types.foldLeft(Map.empty[Data, Set[Data]]) {
-      case (acc, e: Data) =>
-        getAllAncestors(e).foldLeft(acc)((acc, ancestor) => {
-          acc.updatedWith(ancestor) {
-            case Some(descendants) => Some(descendants + e)
-            case None => Some(Set(e))
-          }
-        })
-    }.withDefaultValue(Set.empty)
-
   override val dependencies: Data => List[RosettaType] =
     analysis.types.foldLeft(enclosingTypes) {
       case (outerAcc, e) =>
@@ -142,9 +131,11 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
     s"""$traitComment  sealed trait $scalaTypeName$extending
        |  object $scalaTypeName {
        |    implicit class ${scalaTypeClassName(rosettaName)}($scalaObjectName: $scalaTypeName) {
-       |      def asJava: $javaTypeName = new $javaTypeName { self =>
-       |${generateConvertingAccessor(e, attrs, scalaObjectName).mkString}
-       |${generateStandardJavaMethods(rosettaName, javaTypeName, getAllAnnotationRefs(e))}
+       |      def asJava: $javaTypeName.${rosettaName}Builder = {
+       |        val builder = $javaTypeName.builder
+       |${generateMetaMutator(getAllAnnotationRefs(e))}
+       |${generateBuilderMutator(e, attrs, scalaObjectName).mkString}
+       |        builder
        |      }
        |    }
        |
@@ -191,15 +182,14 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
          |""".stripMargin
     }
 
-  private def generateConvertingAccessor(
-      e: Data,
-      attrs: Iterable[Attribute],
-      scalaObjectName: String
-  ): Vector[String] = {
+  private def generateBuilderMutator(
+                                          e: Data,
+                                          attrs: Iterable[Attribute],
+                                          scalaObjectName: String
+                                        ): Vector[String] = {
     (getInheritedAttributes(e) ++ attrs).map { a =>
-      val accessor = s"get${toUpperFirst(a.getName)}"
+      val mutator = s"set${toUpperFirst(a.getName)}"
       val scalaType = rosettaTypeToScalaType(a.getType)
-      val javaType = rosettaAttrToJavaType(a)
       val matched = "x"
       val conversion =
         convertRosettaAttributeFromScalaToJava(
@@ -208,11 +198,13 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
           couldBeOption = false,
           nameOpt = Some(matched)
         )
-      s"""        override def $accessor: $javaType = $scalaObjectName match {
-         |          case $matched: $scalaType =>
-         |            $conversion
-         |          case _ => None.orNull
-         |        }
+      s"""        builder.$mutator(
+         |          $scalaObjectName match {
+         |            case $matched: $scalaType =>
+         |              $conversion
+         |            case _ => None.orNull
+         |          }
+         |        )
          |""".stripMargin
     }
   }
@@ -236,11 +228,12 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
       allAttrs.map(n => escapeReservedWords(n.getName)).mkString(", ")
     s"""$traitComment  trait $scalaTypeName$extending {$fields  }
         |  object $scalaTypeName {
-        |    implicit class ${scalaTypeClassName(scalaTypeName)}($scalaObjectName: $scalaTypeName) {
-        |      def asJava: $javaTypeName =
-        |        new $javaTypeName { self =>
-        |${allAttrs.map(generateDelegatingAccessor(scalaObjectName)).mkString("\n")}
-        |${generateStandardJavaMethods(rosettaName, javaTypeName, getAllAnnotationRefs(e))}
+        |    implicit class ${scalaTypeClassName(rosettaName)}($scalaObjectName: $scalaTypeName) {
+        |      def asJava: $javaTypeName.${rosettaName}Builder = {
+        |        val builder = $javaTypeName.builder
+        |${generateMetaMutator(getAllAnnotationRefs(e))}
+        |${allAttrs.map(generateBuilderMutator(scalaObjectName)).mkString("\n")}
+        |        builder
         |      }
         |    }
         |
@@ -276,7 +269,7 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
        |        implicit validator: RosettaTypeValidator
        |    ): $javaTypeName => Try[$scalaTypeName] =
        |      x => {
-       |        new ${javaTypeClassName(rosettaName)}(x).asScala
+       |        new ${javaTypeClassName(rosettaName)}(x).asScalaResolvingReferences
        |      }""".stripMargin
 
   private def getAllAnnotationRefs(e: Data): Iterable[AnnotationRef] = {
@@ -286,11 +279,7 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
     }
   }
 
-  private def generateStandardJavaMethods(
-      typeName: String,
-      javaTypeName: String,
-      annotationRefs: Iterable[AnnotationRef]
-  ): String = {
+  private def generateMetaMutator(annotationRefs: Iterable[AnnotationRef]) = {
     val metadataAnnotations =
       annotationRefs.filter(_.getAnnotation.getName == "metadata")
     val metaTypeOpt =
@@ -300,14 +289,16 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
         Some("MetaFields")
       else
         None
-    val getMeta = metaTypeOpt.map { metaType =>
-      s"""          override def getMeta: com.rosetta.model.metafields.$metaType =
-         |            new com.rosetta.model.metafields.$metaType.${metaType}BuilderImpl().build
+    metaTypeOpt.map { metaType =>
+      s"""        builder.setMeta(
+         |          com.rosetta.model.metafields.$metaType.builder
+         |            .addKey(Key.builder
+         |              .setScope("GLOBAL")
+         |              .setKeyValue(UUID.randomUUID.toString)
+         |            )
+         |        )
          |""".stripMargin
     }.getOrElse("")
-    s"""          override def build: $javaTypeName = self
-       |          override def toBuilder: $javaTypeName.${typeName}Builder = ???
-       |$getMeta""".stripMargin
   }
 
   private def generateCaseClass(e: Data): String = {
@@ -352,11 +343,10 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
     s"          ${escapeReservedWords(name)} <- $conversion"
   }
 
-  private def generateDelegatingAccessor(scalaObject: String)(a: Attribute): String = {
+  private def generateBuilderMutator(scalaObject: String)(a: Attribute): String = {
     val name = a.getName
     val field = s"$scalaObject.${escapeReservedWords(name)}"
-    val accessor = s"get${toUpperFirst(name)}"
-    val javaType = rosettaAttrToJavaType(a)
+    val mutator = s"set${toUpperFirst(name)}"
     val conversion =
       convertRosettaAttributeFromScalaToJava(
         a,
@@ -364,9 +354,7 @@ case class ScalaTypeGenerator(analysis: RootElementAnalyzer) extends AbstractSca
         couldBeOption = true,
         nameOpt = Some(field)
       )
-    s"""          override def $accessor: $javaType =
-       |            $conversion
-       |""".stripMargin
+    s"        builder.$mutator($conversion)"
   }
 
   private def generateTraitFields(attributes: Iterable[Attribute]): String = {

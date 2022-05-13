@@ -77,6 +77,7 @@ abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed]
   private def generateTypeFileHeader(version: String): String =
     generateFileHeader(version) +
     s"""import java.time._
+       |import java.util.UUID
        |
        |import scala.jdk.CollectionConverters._
        |import scala.math.BigDecimal
@@ -84,6 +85,8 @@ abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed]
        |
        |import com.regnosys.rosetta.common.hashing.ReferenceResolverProcessStep
        |import com.regnosys.rosetta.common.validation.RosettaTypeValidator
+       |import com.rosetta.model.lib.meta.Key
+       |import com.rosetta.model.metafields.MetaFields
        |import org.isda.cdm.processor.CdmReferenceConfig
        |import ${AbstractScalaGenerator.basePackage}.Utils._
        |
