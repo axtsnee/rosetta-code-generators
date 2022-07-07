@@ -21,7 +21,7 @@ abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed]
     elements
       .headOption
       .map {
-        case e: RosettaEnumeration => generateFileHeader(e.getModel.getVersion) + generatedCode
+        case e: RosettaEnumeration => generateEnumFileHeader(e.getModel.getVersion) + generatedCode
         case e: Function           => generateFunctionFileHeader(e.getModel.getVersion) + generatedCode
         case e: RosettaMetaType    => generateFileHeader(e.getModel.getVersion) + generatedCode
         case e: RosettaType        => generateTypeFileHeader(e.getModel.getVersion) + generatedCode
@@ -60,19 +60,25 @@ abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed]
        |  */
        |""".stripMargin
 
+  private def generateEnumFileHeader(version: String): String =
+    generateFileHeader(version) +
+      s"""import enumeratum._
+         |
+         |""".stripMargin
+
   private def generateFunctionFileHeader(version: String): String =
     generateFileHeader(version) +
-    s"""import java.time._
-       |
-       |import scala.jdk.CollectionConverters._
-       |import scala.math.BigDecimal
-       |import scala.util.{Try, Success, Failure}
-       |
-       |import com.google.inject.Injector
-       |import com.regnosys.rosetta.common.validation.ValidationReport
-       |import ${AbstractScalaGenerator.basePackage}.Utils._
-       |
-       |""".stripMargin
+      s"""import java.time._
+         |
+         |import scala.jdk.CollectionConverters._
+         |import scala.math.BigDecimal
+         |import scala.util.{Try, Success, Failure}
+         |
+         |import com.google.inject.Injector
+         |import com.regnosys.rosetta.common.validation.ValidationReport
+         |import ${AbstractScalaGenerator.basePackage}.Utils._
+         |
+         |""".stripMargin
 
   private def generateTypeFileHeader(version: String): String =
     generateFileHeader(version) +

@@ -44,7 +44,7 @@ case class ScalaEnumerationGenerator(
     }
 
   private def generateSealedTrait(e: RosettaEnumeration): String =
-    s"${generateOptionalComment(e, "  ")}  sealed trait ${e.getName}\n"
+    s"${generateOptionalComment(e, "  ")}  sealed trait ${e.getName} extends EnumEntry\n"
 
   private def generateCompanionObject(e: RosettaEnumeration, extendingEnums: Iterable[RosettaEnumeration]): String = {
     val name = e.getName
@@ -56,8 +56,10 @@ case class ScalaEnumerationGenerator(
     val allEnumValues = enumValuesByAncestor.keys ++ enumValues
     val scalaMatchStatements = allEnumValues.map(matchOnScalaValue(e)).mkString("\n")
     val javaMatchStatements = allEnumValues.map(matchOnJavaValue(e)).mkString("\n")
-    s"""  object $name {
+    s"""  object $name extends Enum[$name] {
        |$inheritedVals$caseObjects
+       |    val values = findValues
+       |
        |    implicit class ${scalaTypeClassName(name)}(x: $name) {
        |      def asJava: $javaName = x match {
        |$scalaMatchStatements
