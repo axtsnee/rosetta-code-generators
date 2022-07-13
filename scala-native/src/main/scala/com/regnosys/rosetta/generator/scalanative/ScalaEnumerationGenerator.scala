@@ -44,7 +44,7 @@ case class ScalaEnumerationGenerator(
     }
 
   private def generateSealedTrait(e: RosettaEnumeration): String =
-    s"${generateOptionalComment(e, "  ")}  sealed trait ${e.getName} extends EnumEntry\n"
+    s"${generateOptionalComment(e, "  ")}  sealed trait ${e.getName} extends EnumEntry with UpperSnakecase\n"
 
   private def generateCompanionObject(e: RosettaEnumeration, extendingEnums: Iterable[RosettaEnumeration]): String = {
     val name = e.getName

@@ -63,6 +63,7 @@ abstract class AbstractScalaGenerator[T <: RosettaRootElement with RosettaNamed]
   private def generateEnumFileHeader(version: String): String =
     generateFileHeader(version) +
       s"""import enumeratum._
+         |import enumeratum.EnumEntry.UpperSnakecase
          |
          |""".stripMargin
 

@@ -12,7 +12,7 @@ class ScalaNativeGeneratorTest extends AnyFlatSpec with Matchers {
     val expected =
       """package org.isda.cdm.scalanative.test.enums {
         |  /** Test enum description. */
-        |  sealed trait TestEnum extends EnumEntry
+        |  sealed trait TestEnum extends EnumEntry with UpperSnakecase
         |  object TestEnum extends Enum[TestEnum] {
         |    /** Test enum value 1 */
         |    case object TestEnumValue1 extends TestEnum
